@@ -22,7 +22,7 @@ AIGF/
 │
 ├─ app.py                 # Main Gradio app
 ├─ model.py               # Model loading & chat logic
-├─ audio.py               # Audio features (transcription/TTS)
+├─ audio.py               # Audio features (STT/TTS) - not implemented yet
 ├─ chats/                 # Auto-generated chat histories
 ├─ models/                # Your GGUF models (not included in repo)
 ├─ requirements.txt       # Python dependencies
@@ -37,7 +37,7 @@ AIGF/
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/AIGF.git
+git clone https://github.com/Hardik-7892/aigf.git
 cd AIGF
 ````
 
