@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+venv/
+.env/
+
+# Data folders
+chats/
+models/*.gguf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

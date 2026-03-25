@@ -1,0 +1,19 @@
+# Core app
+gradio>=6.9.0
+llama-cpp-python>=0.3.17   # set CMAKE_ARGS="-DGGML_CUDA=on"        setx CMAKE_ARGS "-DGGML_CUDA=on"
+#CMAKE_ARGS="-DGGML_CUDA=on" pip install --no-cache-dir llama-cpp-python
+
+# Speech-to-text (Whisper via transformers pipeline)
+transformers>=5.3.0
+datasets>=4.8.4
+soundfile>=0.13.1
+accelerate>=1.13.0
+
+# Text-to-speech
+gTTS>=2.5.4
+
+# Numerics
+numpy>=2.4.3
+
+# Optional: if you ever use pandas in analytics/logging later
+# pandas>=2.0.0
