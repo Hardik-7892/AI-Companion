@@ -7,11 +7,12 @@ faster-whisper>=1.2.1
 torch>=2.11.0
 torchaudio>=2.11.0
 
-# Offline Text-to-speech
-pyttsx3>=2.99
+# Offline TTS (Tortoise TTS for human-like voice)
+tortoise-tts>=0.1.1
 
 # Audio handling
-soundfile>=0.13.1
+pydub>=0.25.1
+numpy>=2.4.3
 
 
 # Numerics
