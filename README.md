@@ -1,6 +1,6 @@
-# AI Girlfriend (AIGF) – Modular LLaMA Chat App
+# AI Companion – Modular GGUF-Powered Chat App
 
-A locally-running conversational AI girlfriend built with **Gradio** and **GGUF LLaMA models** using `llama-cpp-python`.
+A locally-running conversational AI companion built with **Gradio** and **GGUF models** using `llama-cpp-python`.
 
 This version introduces a **modular architecture** with separate components for:
 
@@ -16,6 +16,7 @@ This version introduces a **modular architecture** with separate components for:
 * 🧠 **Local LLM (GGUF)** via `llama-cpp-python`
 * 💬 **Persistent chat memory** (JSON-based)
 * ❤️ **Customizable AI persona**
+* 🌈 **Gender Inclusivity** (Fully customizable gender for both User and Companion)
 * 🔁 **Multiple chat sessions**
 * 🎨 **UI themes** (Pink, Blue, Dark)
 * ⚡ **Efficient model caching** (load once, reuse)
@@ -55,8 +56,8 @@ This version introduces a **modular architecture** with separate components for:
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/Hardik-7892/aigf.git
-cd aigf
+git clone https://github.com/Hardik-7892/AI-Companion.git
+cd AI-Companion
 ```
 
 ---
@@ -157,7 +158,6 @@ Saved to Memory
 
 * Stores chat history in JSON
 * Provides:
-
   * `get_recent(n)` → for context window
   * `get_all()` → full history
 * Future: semantic search (FAISS)
@@ -166,8 +166,8 @@ Saved to Memory
 
 * Builds dynamic **system prompt**
 * Supports:
-
   * Names
+    * User and Companion genders
   * Traits
   * Custom personality text
 
@@ -175,10 +175,8 @@ Saved to Memory
 
 * Central orchestrator
 * Combines:
-
   * Persona + Memory + User input
 * Handles:
-
   * Prompt construction
   * LLM call
   * Persistence
@@ -189,9 +187,8 @@ Saved to Memory
 
 1. Select or create a chat
 2. (Optional) Configure:
-
-   * Your name
-   * AI name
+   * Your name and gender
+   * Companion's name and gender
    * Personality traits
 3. Choose a model
 4. Start chatting
@@ -203,7 +200,6 @@ Saved to Memory
 * Full conversation → saved in `memory.json`
 * Only last **N pairs (default: 10)** sent to LLM
 * UI can:
-
   * Load recent history
   * Load full history
 
@@ -251,7 +247,7 @@ models/
 
 Change launch:
 
-```python
+```bash
 app.launch(server_port=7861)
 ```
 
@@ -281,4 +277,3 @@ Perfect base for:
 * AI companions
 * Roleplay systems
 * Local LLM experimentation
-
