@@ -1,137 +1,284 @@
-# AI Girlfriend (AIGF) - Gradio App
+# AI Girlfriend (AIGF) – Modular LLaMA Chat App
 
-A conversational AI girlfriend app built with **Gradio** and **LLaMA models** (GGUF format).  
-Users can select different models, customize personalities, and chat in a friendly, natural style.
+A locally-running conversational AI girlfriend built with **Gradio** and **GGUF LLaMA models** using `llama-cpp-python`.
 
+This version introduces a **modular architecture** with separate components for:
 
-## Features
+* LLM handling
+* Memory management
+* Persona customization
+* Chat orchestration
 
-- Select between multiple GGUF models.
-- Customize your AI girlfriend’s personality traits.
-- Enter names for yourself and your AI companion.
-- Chat interface with persistent conversation memory.
-- Audio support for transcription and TTS (later).
-- Theme options: Pink, Blue, Dark.
+---
 
+## ✨ Features
 
-## Folder Structure
+* 🧠 **Local LLM (GGUF)** via `llama-cpp-python`
+* 💬 **Persistent chat memory** (JSON-based)
+* ❤️ **Customizable AI persona**
+* 🔁 **Multiple chat sessions**
+* 🎨 **UI themes** (Pink, Blue, Dark)
+* ⚡ **Efficient model caching** (load once, reuse)
+
+---
+
+## 📁 Project Structure
 
 ```
-
-AIGF/
+.
+├── app.py                      # Main Gradio app
 │
-├─ app.py                 # Main Gradio app
-├─ model.py               # Model loading & chat logic
-├─ audio.py               # Audio features (STT/TTS) - not implemented yet
-├─ chats/                 # Auto-generated chat histories
-├─ models/                # Your GGUF models (not included in repo)
-├─ requirements.txt       # Python dependencies
-├─ run.bat                # Windows launcher
-└─ .gitignore             # Files/folders to ignore in Git
+├── models/
+│   └── model.gguf             # Your GGUF model(s)
+│
+├── model/
+│   ├── __init__.py
+│   ├── chat_engine.py         # Orchestrates chat flow
+│   ├── llm.py                 # LLaMA wrapper (with caching)
+│   ├── memory.py              # Persistent conversation memory
+│   └── persona.py             # Persona + system prompt builder
+│
+├── chats/                     # Auto-created per chat session
+│   └── <chat_id>/
+│       ├── memory.json
+│       └── persona.json
+│
+├── chats.json                 # Stores list of chat IDs
+├── requirements.txt
+└── README.md
+```
 
-````
+---
 
+## ⚙️ Setup
 
-## Setup Instructions
-
-1. **Clone the repository**
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/Hardik-7892/aigf.git
-cd AIGF
-````
+cd aigf
+```
 
-2. **Create a virtual environment**
+---
+
+### 2. Create virtual environment
 
 ```bash
 python -m venv venv
 ```
 
-3. **Activate the virtual environment**
+Activate it:
 
-* Windows:
+* **Windows**
 
 ```bash
 venv\Scripts\activate
 ```
 
-* macOS / Linux:
+* **macOS/Linux**
 
 ```bash
 source venv/bin/activate
 ```
 
-4. **Install dependencies**
+---
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-5. **Add your GGUF models**
+---
 
-Place your `.gguf` model files in the `models/` folder.
+### 4. Add GGUF model(s)
+
+Place your `.gguf` file(s) inside:
+
+```
+models/
+```
+
 Example:
 
 ```
 models/
-├─ Meta-Llama-3-8B-Instruct-Q4_K_M.gguf
-├─ Llama-3.2-3B-Instruct-Q6_K.gguf
-├─ Any other model.gguf file supported by llama-cpp-python
+├── llama-3-8b-instruct.Q4_K_M.gguf
 ```
 
-> ⚠️ Models are **not included** in this repository due to size restrictions.
+> ⚠️ Models are NOT included due to size constraints.
 
-6. **Run the app**
+---
+
+### 5. Run the app
 
 ```bash
 python app.py
 ```
 
-Or on Windows:
+The app will open in your browser:
 
-```bash
-run.bat
+```
+http://127.0.0.1:7860
 ```
 
-Your default browser should open automatically to the chat interface (usually `http://127.0.0.1:7860`).
+---
 
+## 🚀 How It Works
 
-## Usage
+### 1. Chat Flow
 
-1. Select an existing chat or create a new one.
-2. Enter optional details:
+```
+User Input
+   ↓
+ChatEngine
+   ↓
+[System Prompt (Persona)]
++ [Recent Memory]
++ [User Message]
+   ↓
+LLM (llama.cpp)
+   ↓
+Response
+   ↓
+Saved to Memory
+```
+
+---
+
+### 2. Core Components
+
+#### 🔹 `LLM` (model/llm.py)
+
+* Wraps `llama_cpp.Llama`
+* Uses **class-level caching** → model loads only once
+
+#### 🔹 `Memory` (model/memory.py)
+
+* Stores chat history in JSON
+* Provides:
+
+  * `get_recent(n)` → for context window
+  * `get_all()` → full history
+* Future: semantic search (FAISS)
+
+#### 🔹 `Persona` (model/persona.py)
+
+* Builds dynamic **system prompt**
+* Supports:
+
+  * Names
+  * Traits
+  * Custom personality text
+
+#### 🔹 `ChatEngine` (model/chat_engine.py)
+
+* Central orchestrator
+* Combines:
+
+  * Persona + Memory + User input
+* Handles:
+
+  * Prompt construction
+  * LLM call
+  * Persistence
+
+---
+
+## 💡 Usage
+
+1. Select or create a chat
+2. (Optional) Configure:
 
    * Your name
-   * AI girlfriend’s name
-   * Personality traits or custom description
-3. Select a model from the dropdown.
-4. Start chatting!
-5. Use the **Reset** button to clear visible chat history (keeps saved memory).
+   * AI name
+   * Personality traits
+3. Choose a model
+4. Start chatting
 
+---
 
-## Troubleshooting & Tips
+## 🧠 Memory Behavior
 
-* **WindowsPath errors with LLaMA models**:
-  Make sure `model_path` passed to `Llama()` is a **string**, not a `Path` object.
-  Example fix in `model.py`:
+* Full conversation → saved in `memory.json`
+* Only last **N pairs (default: 10)** sent to LLM
+* UI can:
 
-  ```python
-  llm = Llama(model_path=str(model_path), n_ctx=2048, n_threads=8)
-  ```
+  * Load recent history
+  * Load full history
 
-* **Missing GGUF models**:
-  The app won’t work without proper GGUF files in the `models/` folder.
+---
 
-* **Port already in use**:
-  If `7860` is busy, change the port in `app.launch(server_port=7861)`.
+## ⚠️ Notes & Tips
 
-* **Virtual environment issues**:
-  Always activate the venv before running:
-  `venv\Scripts\activate` (Windows) or `source venv/bin/activate` (macOS/Linux).
+### Model Issues
 
-* **Audio features**:
-  Ensure all audio dependencies (`soundfile`, `whisper`, `TTS`) are installed if you plan to use transcription or TTS.
+* Ensure model path is a **string**, not `Path`
+* Already handled in code via:
 
-* **Performance tips**:
-  Large models (8B+) may need GPU or fewer threads for faster responses. Adjust `n_threads` and `n_gpu_layers` in `load_model()`.
+```python
+LLM.get_instance(str(model_path))
+```
+
+---
+
+### Performance Tuning
+
+You can tweak in `LLM`:
+
+```python
+n_ctx=2048
+n_threads=8
+n_gpu_layers=35
+```
+
+* Increase `n_gpu_layers` → better GPU usage
+* Adjust `n_threads` → CPU optimization
+
+---
+
+### No Model Showing?
+
+* Make sure `.gguf` file exists in:
+
+```
+models/
+```
+
+---
+
+### Port Already in Use
+
+Change launch:
+
+```python
+app.launch(server_port=7861)
+```
+
+---
+
+## 🔮 Roadmap
+
+* 🔍 Semantic memory (FAISS)
+* 🎤 Speech-to-text (Whisper)
+* 🔊 Text-to-speech
+* 🧠 Long-term personality evolution
+* 🌐 Remote model support
+
+---
+
+## ⚡ Summary
+
+This project is a **clean, modular local LLM chat system** with:
+
+* Separation of concerns
+* Persistent memory
+* Dynamic persona control
+* Efficient model reuse
+
+Perfect base for:
+
+* AI companions
+* Roleplay systems
+* Local LLM experimentation
 
