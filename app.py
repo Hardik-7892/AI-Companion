@@ -1,375 +1,355 @@
 # app.py
 
 import json
-import gradio as gr
-from model import chat, load_persona, save_persona
-# from audio import tts_from_text, transcribe_audio
 from pathlib import Path
 
-# ---------- chat list helpers ----------
+import gradio as gr
 
-CHATS_FILE = "chats.json"
+from model import LLM, ChatEngine, Memory, Persona
 
-def load_chat_ids():
+# --------------------------------------------------------------------------- #
+# Config
+# --------------------------------------------------------------------------- #
+
+CHATS_FILE  = "chats.json"
+CHATS_BASE  = "chats"
+MODELS_DIR  = Path("./models")
+
+# Number of user-assistant pairs shown in the chat panel on load.
+# The full log is always in memory.json; this only controls the UI default.
+N_RECENT_UI: int = 10
+
+PERSONALITY_CHOICES = [
+    "Playful", "Affectionate", "Shy", "Confident", "Teasing",
+    "Supportive", "Jealous", "Clingy", "Mature", "Tsundere",
+]
+
+
+# --------------------------------------------------------------------------- #
+# Engine factory
+# --------------------------------------------------------------------------- #
+
+def get_engine(chat_id: str, model_path: str | Path) -> ChatEngine:
+    llm     = LLM.get_instance(str(model_path))
+    persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
+    memory  = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
+    return ChatEngine(llm=llm, memory=memory, persona=persona)
+
+
+# --------------------------------------------------------------------------- #
+# Chat-list helpers
+# --------------------------------------------------------------------------- #
+
+def load_chat_ids() -> list[str]:
     try:
         with open(CHATS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        # default first chat
         return ["default"]
 
-def save_chat_ids(chat_ids):
+
+def save_chat_ids(chat_ids: list[str]) -> None:
     with open(CHATS_FILE, "w", encoding="utf-8") as f:
         json.dump(chat_ids, f, ensure_ascii=False, indent=4)
 
 
-def create_chat(new_name, current_chat_ids):
-    new_name = (new_name or "").strip()
-    # current_chat_ids will be the current value of the dropdown
-    if isinstance(current_chat_ids, list):
-        chat_ids = current_chat_ids
-    else:
-        chat_ids = load_chat_ids()
+def refresh_chat_selector() -> gr.update:
+    """
+    Called by app.load() every time the browser loads the page.
+    Re-reads chats.json so newly-created chats survive a reload.
+    """
+    chat_ids = load_chat_ids()
+    return gr.update(choices=chat_ids, value=chat_ids[0])
+
+
+def create_chat(new_name: str, current_value: str):
+    """
+    current_value is the Dropdown's *selected value* (a string), not its choices.
+    We always read the authoritative list from disk.
+    """
+    new_name  = (new_name or "").strip()
+    chat_ids  = load_chat_ids()
 
     if new_name and new_name not in chat_ids:
         chat_ids.append(new_name)
         save_chat_ids(chat_ids)
-        msg = f"Chat '{new_name}' created."
-        value = new_name
-    else:
-        msg = "Enter a unique chat name."
-        value = chat_ids[0] if chat_ids else "default"
+        return gr.update(choices=chat_ids, value=new_name), f"Chat '{new_name}' created."
 
-    return gr.update(choices=chat_ids, value=value), msg
+    if new_name in chat_ids:
+        # User typed an existing name — just switch to it silently
+        return gr.update(choices=chat_ids, value=new_name), f"Switched to '{new_name}'."
 
-
-# ---------- persona + traits ----------
-
-PERSONALITY_CHOICES = [
-    "Playful",
-    "Affectionate",
-    "Shy",
-    "Confident",
-    "Teasing",
-    "Supportive",
-    "Jealous",
-    "Clingy",
-    "Mature",
-    "Tsundere",
-]
+    return gr.update(choices=chat_ids, value=current_value), "Enter a unique chat name."
 
 
-def ask_names_and_traits(user_name, girlfriend_name, traits, custom_personality, chat_id):
-    persona = load_persona(chat_id)
+# --------------------------------------------------------------------------- #
+# History helpers
+# --------------------------------------------------------------------------- #
 
-    if user_name:
-        persona["user_name"] = user_name
-    if girlfriend_name:
-        persona["girlfriend_name"] = girlfriend_name
+def _history_status(shown: int, total: int) -> str:
+    if shown >= total:
+        return f"All {total} exchanges loaded."
+    return f"Showing latest {shown} of {total} exchanges — click 'Load All History' to see more."
 
-    persona["personality_traits"] = traits or []
-    persona["custom_personality"] = custom_personality or ""
 
-    save_persona(persona, chat_id)
+def load_recent_history(chat_id: str) -> tuple[list[dict], str]:
+    """Load the last N_RECENT_UI pairs into the chatbot panel."""
+    memory     = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
+    total      = memory.pair_count()
+    recent     = memory.get_recent(N_RECENT_UI)
+    shown      = len(recent) // 2
+    return recent, _history_status(shown, total)
 
+
+def load_all_history(chat_id: str) -> tuple[list[dict], str]:
+    """Load every message for this chat into the chatbot panel."""
+    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
+    total  = memory.pair_count()
+    return memory.get_all(), _history_status(total, total)
+
+
+# --------------------------------------------------------------------------- #
+# Persona / details tab
+# --------------------------------------------------------------------------- #
+
+def save_details(
+    user_name: str,
+    girlfriend_name: str,
+    traits: list[str],
+    custom_personality: str,
+    chat_id: str,
+) -> str:
+    persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
+    persona.update(
+        user_name          = user_name or persona.data["user_name"],
+        girlfriend_name    = girlfriend_name or persona.data["girlfriend_name"],
+        personality_traits = traits or [],
+        custom_personality = custom_personality or "",
+    )
     return f"Details saved for chat '{chat_id}'!"
 
 
-# ---------- chat callback (messages format) ----------
+# --------------------------------------------------------------------------- #
+# Chat callback
+# --------------------------------------------------------------------------- #
 
-def chat_page(user_input, history, chat_id, model_name):
-    """
-    user_input: current message from textbox
-    history: list of dicts, each with {'role': 'user'|'assistant', 'content': str}
-    """
-    if history is None:
-        history = []
+def chat_page(
+    user_input: str,
+    history: list[dict],
+    chat_id: str,
+    model_name: str,
+) -> tuple[str, list[dict], str]:
+    if not user_input.strip():
+        return user_input, history or [], ""
 
-    persona = load_persona(chat_id)
-    user_name = persona.get("user_name", "")
-    girlfriend_name = persona.get("girlfriend_name", "")
-    
-    # Construct model path
-    MODELS_DIR = Path("./models")
+    history    = history or []
     model_path = MODELS_DIR / model_name
+    engine     = get_engine(chat_id, model_path)
+    reply      = engine.chat(user_input)
 
-    assistant_reply = chat(
-        user_input,
-        chat_id=chat_id,
-        user_name=user_name,
-        girlfriend_name=girlfriend_name,
-        model_path = model_path
-    )
+    history.append({"role": "user",      "content": user_input})
+    history.append({"role": "assistant", "content": reply})
 
-    history.append({"role": "user", "content": user_input})
-    history.append({"role": "assistant", "content": assistant_reply})
+    # Update the status line with new totals
+    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
+    total  = memory.pair_count()
+    shown  = len(history) // 2
+    status = _history_status(shown, total)
 
-    return "", history
-
-
-# ---------- reset conversation for a chat (optional) ----------
-
-def reset_chat(chat_id):
-    # Only resets UI history; your model.py can expose a clear function if you also
-    # want to wipe memory.json/persona.json for that chat.
-    return [], f"Cleared visible history for chat '{chat_id}'."
+    return "", history, status
 
 
-# ---------- theme + CSS ----------
+def reset_chat(chat_id: str) -> tuple[list, str]:
+    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
+    memory.clear()
+    return [], "History cleared."
 
-# Simple built-in theme tweak (you can swap to Glass/Soft/etc.)
+
+# --------------------------------------------------------------------------- #
+# Theme
+# --------------------------------------------------------------------------- #
+
 theme = gr.themes.Soft(
     primary_hue="pink",
     secondary_hue="violet",
     neutral_hue="gray",
 ).set(
-    body_background_fill="#fdf2f8",
-    body_text_color="#1f2933",
-    block_background_fill="#ffffff",
-    block_border_width="1px",
-    block_border_color="#f9a8d4",
-    input_background_fill="#ffffff",
-    input_border_color="#f472b6",
-    button_primary_background_fill="linear-gradient(90deg, *primary_300, *secondary_300)",
-    button_primary_background_fill_hover="linear-gradient(90deg, *primary_200, *secondary_200)",
-    button_primary_text_color="#ffffff",
+    body_background_fill    = "#fdf2f8",
+    body_text_color         = "#1f2933",
+    block_background_fill   = "#ffffff",
+    block_border_width      = "1px",
+    block_border_color      = "#f9a8d4",
+    input_background_fill   = "#ffffff",
+    input_border_color      = "#f472b6",
+    button_primary_background_fill       = "linear-gradient(90deg, *primary_300, *secondary_300)",
+    button_primary_background_fill_hover = "linear-gradient(90deg, *primary_200, *secondary_200)",
+    button_primary_text_color            = "#ffffff",
 )
 
-
 custom_css = """
-body[data-theme="pink"] #chat-selector-row {
-  background: #fce7f3;
-  border-color: #f9a8d4;
-}
-body[data-theme="pink"] #tabs-container {
-  background: #fdf2f8;
-  border-color: #f9a8d4;
-}
-body[data-theme="pink"] #chatbot-block .gradio-chatbot {
-  background: #fff7fb;
-  border-color: #fecdd3;
-}
+body[data-theme="pink"] #chat-selector-row { background:#fce7f3; border-color:#f9a8d4; }
+body[data-theme="pink"] #tabs-container    { background:#fdf2f8; border-color:#f9a8d4; }
+body[data-theme="pink"] #chatbot-block .gradio-chatbot { background:#fff7fb; border-color:#fecdd3; }
 
-/* Blue theme */
-body[data-theme="blue"] #chat-selector-row {
-  background: #dbeafe;
-  border-color: #60a5fa;
-}
-body[data-theme="blue"] #tabs-container {
-  background: #eff6ff;
-  border-color: #60a5fa;
-}
-body[data-theme="blue"] #chatbot-block .gradio-chatbot {
-  background: #e0f2fe;
-  border-color: #93c5fd;
-}
+body[data-theme="blue"] #chat-selector-row { background:#dbeafe; border-color:#60a5fa; }
+body[data-theme="blue"] #tabs-container    { background:#eff6ff; border-color:#60a5fa; }
+body[data-theme="blue"] #chatbot-block .gradio-chatbot { background:#e0f2fe; border-color:#93c5fd; }
 
-/* Dark theme */
-body[data-theme="dark"] #chat-selector-row {
-  background: #1f2933;
-  border-color: #4b5563;
-}
-body[data-theme="dark"] #tabs-container {
-  background: #0f172a;
-  border-color: #4b5563;
-}
-body[data-theme="dark"] #chatbot-block .gradio-chatbot {
-  background: #020617;
-  border-color: #475569;
-}
+body[data-theme="dark"] #chat-selector-row { background:#1f2933; border-color:#4b5563; }
+body[data-theme="dark"] #tabs-container    { background:#0f172a; border-color:#4b5563; }
+body[data-theme="dark"] #chatbot-block .gradio-chatbot { background:#020617; border-color:#475569; }
 
-/* Shared tweaks */
-#chat-selector-row {
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  border-width: 1px;
-}
-#tabs-container {
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  border-width: 1px;
-}
-#chatbot-block .gradio-chatbot {
-  border-radius: 0.75rem;
-  border-width: 1px;
-}
-button {
-  border-radius: 9999px !important;
-}
+#chat-selector-row { padding:.75rem 1rem; border-radius:.75rem; border-width:1px; }
+#tabs-container    { border-radius:.75rem; padding:.75rem; border-width:1px; }
+#chatbot-block .gradio-chatbot { border-radius:.75rem; border-width:1px; }
+button { border-radius:9999px !important; }
 """
 
 apply_theme_js = """
 (theme_name) => {
-  const body = document.querySelector('body');
-  if (!body) return;
-  if (theme_name === "Pink") {
-    body.setAttribute('data-theme', 'pink');
-  } else if (theme_name === "Blue") {
-    body.setAttribute('data-theme', 'blue');
-  } else if (theme_name === "Dark") {
-    body.setAttribute('data-theme', 'dark');
-  } else {
-    body.setAttribute('data-theme', 'pink');
-  }
-  return theme_name;
+    const body = document.querySelector('body');
+    if (!body) return;
+    const map = { Pink: 'pink', Blue: 'blue', Dark: 'dark' };
+    body.setAttribute('data-theme', map[theme_name] ?? 'pink');
+    return theme_name;
 }
 """
 
 
-def apply_theme(theme_name):
-    if theme_name == "Pink":
-        return "theme-pink"
-    if theme_name == "Blue":
-        return "theme-blue"
-    if theme_name == "Dark":
-        return "theme-dark"
-    return "theme-pink"
+# --------------------------------------------------------------------------- #
+# Gradio app
+# --------------------------------------------------------------------------- #
 
-# ---------- Gradio app ----------
-def launch_gradio_app():
+def launch_gradio_app() -> None:
     with gr.Blocks(theme=theme, css=custom_css) as app:
+
         chat_ids = load_chat_ids()
 
-        # Top bar: left = chat selection, right = theme selector
+        # ---- Top bar -------------------------------------------------------
         with gr.Row(elem_id="top-bar"):
             with gr.Row(elem_id="chat-selector-row"):
                 chat_selector = gr.Dropdown(
-                    choices=chat_ids,
-                    value=chat_ids[0],
-                    label="Select chat",
+                    choices=chat_ids, value=chat_ids[0], label="Select chat"
                 )
                 new_chat_name = gr.Textbox(
-                    label="New chat name",
-                    placeholder="e.g. Chat 2",
+                    label="New chat name", placeholder="e.g. Chat 2"
                 )
                 create_chat_btn = gr.Button("Create Chat", variant="primary")
-                create_status = gr.Textbox(
-                    label="Chat status",
-                    interactive=False,
-                )
+                create_status   = gr.Textbox(label="Chat status", interactive=False)
 
-            # Right side: theme selector
             theme_choice = gr.Dropdown(
-                choices=["Pink", "Blue", "Dark"],
-                value="Pink",
-                label="Theme",
-                scale=0,
-                elem_id="theme-dropdown",
+                choices=["Pink", "Blue", "Dark"], value="Pink",
+                label="Theme", scale=0, elem_id="theme-dropdown",
             )
 
-        # # hidden anchor element to carry the theme class
-        # theme_anchor = gr.HTML(value="", elem_id="theme-anchor")
+        # Re-read chat list from disk every time the browser loads the page.
+        # This is the fix for chats disappearing after a reload.
+        app.load(fn=refresh_chat_selector, outputs=[chat_selector])
 
-        # # When theme changes, write class name into theme_anchor
-        # theme_choice.change(
-        #     fn=apply_theme,
-        #     inputs=theme_choice,
-        #     outputs=theme_anchor,
-        # )
-        theme_choice.change(
-            None,
-            inputs=theme_choice,
-            outputs=None,
-            js=apply_theme_js,
-        )
+        theme_choice.change(None, inputs=theme_choice, outputs=None, js=apply_theme_js)
 
-        # Chat creation wiring
         create_chat_btn.click(
             fn=create_chat,
             inputs=[new_chat_name, chat_selector],
             outputs=[chat_selector, create_status],
         )
 
-        # Main content (tabs)
+        # ---- Main tabs -----------------------------------------------------
         with gr.Column(elem_id="tabs-container"):
             with gr.Tabs():
-                # ---------- First Tab: Enter Details ----------
+
+                # ---- Tab 1: Details ----------------------------------------
                 with gr.TabItem("Enter Details"):
                     gr.Markdown("### Please enter your details (Optional):")
-
                     with gr.Row():
                         user_name_input = gr.Textbox(
-                            label="Your Name (Optional)",
-                            placeholder="Enter your name",
+                            label="Your Name (Optional)", placeholder="Enter your name"
                         )
                         girlfriend_name_input = gr.Textbox(
-                            label="Girlfriend's Name (Optional)",
-                            placeholder="Enter her name",
+                            label="Girlfriend's Name (Optional)", placeholder="Enter her name"
                         )
-
                     gr.Markdown("### Choose personality traits (Optional):")
-
                     traits_input = gr.CheckboxGroup(
-                        choices=PERSONALITY_CHOICES,
-                        label="Select one or more traits",
+                        choices=PERSONALITY_CHOICES, label="Select one or more traits"
                     )
-
                     custom_personality_input = gr.Textbox(
                         label="Custom personality (Optional)",
                         placeholder="Describe how you want her to behave, tone, style, etc.",
                         lines=3,
                     )
-
                     initialize_button = gr.Button("Initialize Chat", variant="secondary")
-                    message_box = gr.Textbox(
-                        label="Status",
-                        interactive=False,
-                    )
+                    message_box = gr.Textbox(label="Status", interactive=False)
 
                     initialize_button.click(
-                        fn=ask_names_and_traits,
+                        fn=save_details,
                         inputs=[
-                            user_name_input,
-                            girlfriend_name_input,
-                            traits_input,
-                            custom_personality_input,
-                            chat_selector,
+                            user_name_input, girlfriend_name_input,
+                            traits_input, custom_personality_input, chat_selector,
                         ],
                         outputs=message_box,
                     )
 
-                # ---------- Second Tab: Chat Interface ----------
-                
+                # ---- Tab 2: Chat -------------------------------------------
                 with gr.TabItem("Chat"):
                     gr.Markdown("### Chat with Your AI Girlfriend")
 
+                    # Status bar: shows how many exchanges are loaded vs total
+                    history_status = gr.Textbox(
+                        value="", interactive=False, show_label=False,
+                        container=False, elem_id="history-status"
+                    )
+                    load_all_btn = gr.Button(
+                        "📜 Load All History", variant="secondary", size="sm"
+                    )
+
                     with gr.Column(elem_id="chatbot-block"):
                         chatbot = gr.Chatbot(
-                            label="Conversation",
+                            label="Conversation", height=520
                         )
-                    MODELS_DIR = Path("./models")
-                    model_files = [f.name for f in MODELS_DIR.glob("*.gguf")]
 
+                    model_files = [f.name for f in MODELS_DIR.glob("*.gguf")]
                     model_selector = gr.Dropdown(
-                        choices=model_files,
-                        label="Choose Model",
-                        value=model_files[0] if model_files else None
+                        choices=model_files, label="Choose Model",
+                        value=model_files[0] if model_files else None,
                     )
                     chat_input = gr.Textbox(
-                        label="Your Message",
-                        placeholder="Say something...",
-                        lines=2,
+                        label="Your Message", placeholder="Say something...", lines=2
+                    )
+                    with gr.Row():
+                        send_btn  = gr.Button("Send",              variant="primary")
+                        reset_btn = gr.Button("Reset Chat",        variant="secondary")
+
+                    # When the selected chat changes → load latest N into chatbot
+                    chat_selector.change(
+                        fn=load_recent_history,
+                        inputs=[chat_selector],
+                        outputs=[chatbot, history_status],
                     )
 
-                    send_btn = gr.Button("Send", variant="primary")
-                    reset_btn = gr.Button("Reset Visible Chat", variant="secondary")
-
-                    chat_input.submit(
-                        fn=chat_page,
-                        inputs=[chat_input, chatbot, chat_selector, model_selector],
-                        outputs=[chat_input, chatbot],
+                    # Load all history button
+                    load_all_btn.click(
+                        fn=load_all_history,
+                        inputs=[chat_selector],
+                        outputs=[chatbot, history_status],
                     )
 
-                    send_btn.click(
-                        fn=chat_page,
-                        inputs=[chat_input, chatbot, chat_selector, model_selector],
-                        outputs=[chat_input, chatbot],
+                    # Also load recent history when the page first loads
+                    app.load(
+                        fn=load_recent_history,
+                        inputs=[chat_selector],
+                        outputs=[chatbot, history_status],
                     )
+
+                    shared_inputs  = [chat_input, chatbot, chat_selector, model_selector]
+                    shared_outputs = [chat_input, chatbot, history_status]
+
+                    chat_input.submit(fn=chat_page, inputs=shared_inputs, outputs=shared_outputs)
+                    send_btn.click(   fn=chat_page, inputs=shared_inputs, outputs=shared_outputs)
 
                     reset_btn.click(
                         fn=reset_chat,
                         inputs=[chat_selector],
-                        outputs=[chatbot, message_box],
+                        outputs=[chatbot, history_status],
                     )
 
         app.launch(inbrowser=True)
