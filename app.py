@@ -114,7 +114,9 @@ def load_all_history(chat_id: str) -> tuple[list[dict], str]:
 
 def save_details(
     user_name: str,
-    girlfriend_name: str,
+    companion_name: str,
+    user_gender: str,
+    companion_gender: str,
     traits: list[str],
     custom_personality: str,
     chat_id: str,
@@ -122,9 +124,11 @@ def save_details(
     persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
     persona.update(
         user_name          = user_name or persona.data["user_name"],
-        girlfriend_name    = girlfriend_name or persona.data["girlfriend_name"],
+        companion_name    = companion_name or persona.data["companion_name"],
         personality_traits = traits or [],
         custom_personality = custom_personality or "",
+        user_gender = user_gender or "",
+        companion_gender = companion_gender or "Female",
     )
     return f"Details saved for chat '{chat_id}'!"
 
@@ -265,8 +269,15 @@ def launch_gradio_app() -> None:
                         user_name_input = gr.Textbox(
                             label="Your Name (Optional)", placeholder="Enter your name"
                         )
-                        girlfriend_name_input = gr.Textbox(
-                            label="Girlfriend's Name (Optional)", placeholder="Enter her name"
+                        companion_name_input = gr.Textbox(
+                            label="Companion's Name (Optional)", placeholder="Enter their name"
+                        )
+                    with gr.Row():
+                        user_gender_input = gr.Textbox(
+                            label="Your Gender (Optional)", placeholder="Enter your gender"
+                        )
+                        companion_gender_input = gr.Textbox(
+                            label="Companion's Gender (Optional)", placeholder="Enter their gender (Female by default)"
                         )
                     gr.Markdown("### Choose personality traits (Optional):")
                     traits_input = gr.CheckboxGroup(
@@ -283,7 +294,8 @@ def launch_gradio_app() -> None:
                     initialize_button.click(
                         fn=save_details,
                         inputs=[
-                            user_name_input, girlfriend_name_input,
+                            user_name_input, companion_name_input,
+                            user_gender_input, companion_gender_input,
                             traits_input, custom_personality_input, chat_selector,
                         ],
                         outputs=message_box,
@@ -291,7 +303,7 @@ def launch_gradio_app() -> None:
 
                 # ---- Tab 2: Chat -------------------------------------------
                 with gr.TabItem("Chat"):
-                    gr.Markdown("### Chat with Your AI Girlfriend")
+                    gr.Markdown("### Chat with Your AI Companion")
 
                     # Status bar: shows how many exchanges are loaded vs total
                     history_status = gr.Textbox(
@@ -317,7 +329,7 @@ def launch_gradio_app() -> None:
                     )
                     with gr.Row():
                         send_btn  = gr.Button("Send",              variant="primary")
-                        reset_btn = gr.Button("Reset Chat",        variant="secondary")
+                        reset_btn = gr.Button("Delete Chat Data",        variant="secondary")
 
                     # When the selected chat changes → load latest N into chatbot
                     chat_selector.change(
