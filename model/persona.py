@@ -28,7 +28,9 @@ DEFAULT_SYSTEM_PROMPT = (
 
 _DEFAULT_DATA = {
     "user_name": "",
-    "girlfriend_name": "",
+    "companion_name": "",
+    "user_gender": "",
+    "companion_gender": "",
     "personality_traits": [],
     "custom_personality": "",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
@@ -101,8 +103,16 @@ class Persona:
         if user_name:
             prompt += f" The user's name is {user_name}."
 
-        girlfriend_name: str = self.data.get("girlfriend_name", "")
-        if girlfriend_name:
-            prompt += f" The girlfriend's name (your name) is {girlfriend_name}."
+        companion_name: str = self.data.get("companion_name", "")
+        if companion_name:
+            prompt += f" The girlfriend's name (your name) is {companion_name}."
+
+        user_gender: str = self.data.get("user_gender", "")
+        if user_gender:
+            prompt += f" The user's gender is {user_gender}."
+
+        companion_gender: str = self.data.get("companion_gender", "")
+        if companion_gender:
+            prompt += f" The companion's gender (your gender) is {companion_gender}."
 
         return prompt
