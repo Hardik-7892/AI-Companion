@@ -1,22 +1,23 @@
 # Core app
 gradio>=6.9.0
-llama-cpp-python>=0.3.17
+llama-cpp-python>=0.3.20
 
 # Offline Speech-to-text (Whisper via faster-whisper)
-faster-whisper>=1.2.1
-torch>=2.11.0
-torchaudio>=2.11.0
+faster-whisper
+torch==1.13.0
+torchaudio==1.13.0
 
 # Offline TTS (Tortoise TTS for human-like voice)
-tortoise-tts>=0.1.1
+# tortoise-tts>=3.0.0
+TTS>=0.21.0
+transformers==4.56.2
+simpleaudio 
 
 # Audio handling
-pydub>=0.25.1
-numpy>=2.4.3
-
+pydub
 
 # Numerics
-numpy>=2.4.3
+numpy
 
 # Optional: if you ever use pandas in analytics/logging later
-# pandas>=2.0.0
+# pandas

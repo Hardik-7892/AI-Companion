@@ -3,7 +3,7 @@
 import json
 import gradio as gr
 from model import chat, load_persona, save_persona
-from audio import transcribe_audio, tts_from_text
+# from audio import tts_from_text, transcribe_audio
 from pathlib import Path
 
 # ---------- chat list helpers ----------

@@ -1,35 +1,26 @@
-from transformers import pipeline
-import numpy as np
-from gtts import gTTS
+import os
 import tempfile
-from pathlib import Path
 
-asr = pipeline("automatic-speech-recognition", model="openai/whisper-tiny.en")  # or any small model
+# ---------- Offline Speech-to-Text (Whisper) ----------
+try:
+    from faster_whisper import WhisperModel
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
 
-def transcribe_audio(audio):
-    if audio is None:
-        return ""
-    sr, y = audio
-    if y.ndim > 1:
-        y = y.mean(axis=1)
-    y = y.astype(np.float32)
-    if np.max(np.abs(y)) > 0:
-        y = y / np.max(np.abs(y))
-    text = asr({"sampling_rate": sr, "raw": y})["text"]
-    return text
+_whisper_models = {}
+def _load_whisper_model(model_size="small"):
+    if model_size not in _whisper_models:
+        if not WHISPER_AVAILABLE:
+            raise RuntimeError(
+                "faster-whisper not installed. Install via `pip install faster-whisper`"
+            )
+        _whisper_models[model_size] = WhisperModel(
+            model_size, device="cpu", compute_type="int8"
+        )
+    return _whisper_models[model_size]
 
-def tts_from_text(text: str, lang: str = "en"):
-    text = (text or "").strip()
-    if not text:
-        return None  # Gradio Audio will show nothing
-
-    # Create a temporary mp3 file
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-    tmp_path = Path(tmp.name)
-    tmp.close()
-
-    tts = gTTS(text=text, lang=lang, slow=False)
-    tts.save(str(tmp_path))  # gTTS writes MP3
-
-    # Gradio Audio accepts a file path as str/Path[web:113]
-    return str(tmp_path)
+def transcribe_audio(audio_path: str, model_size="small") -> str:
+    model = _load_whisper_model(model_size)
+    segments, _info = model.transcribe(audio_path, beam_size=5)
+    return " ".join(segment.text for segment in segments)
