@@ -19,5 +19,8 @@ pydub
 # Numerics
 numpy
 
+# Vector DB
+faiss-cpu
+sentence-transformers
 # Optional: if you ever use pandas in analytics/logging later
 # pandas

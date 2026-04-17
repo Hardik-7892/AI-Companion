@@ -51,9 +51,25 @@ class ChatEngine:
     # ------------------------------------------------------------------
 
     def chat(self, user_input: str) -> str:
-        """Send user_input, return the assistant reply, and save the turn."""
+        # 1. Prepare messages with strict instructions
+        # Your persona/system prompt MUST say: "Always end your response with '||[FACT]' if a new fact is mentioned. If not, end with '||None'."
         messages = self.build_messages(user_input)
-        reply = self.llm.chat(messages)
-        self.memory.add("user", user_input)
-        self.memory.add("assistant", reply)
+        raw_output = self.llm.chat(messages)
+
+        # 2. The Parsing Logic (Safety first!)
+        reply = raw_output
+        fact = "None"
+
+        if "||" in raw_output:
+            parts = raw_output.split("||", 1)
+            reply = parts[0].strip()
+            fact = parts[1].strip().replace("Fact: ", "")
+        
+        # 3. The Double-Write (Archive + Index)
+        self.memory.add_to_archive("user", user_input)
+        self.memory.add_to_archive("assistant", reply)
+
+        if fact.lower() != "none":
+            self.memory.add_to_index(fact)
+
         return reply
