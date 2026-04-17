@@ -10,6 +10,8 @@ venv/
 # Data folders
 chats/
 models/*.gguf
+tortoise_models/
+audio_models/
 
 # OS
 .DS_Store
