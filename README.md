@@ -113,7 +113,11 @@ http://127.0.0.1:7860
 
 ---
 
-## 🚀 How It Works (RAG Pipeline)
+## System Architecture
+The core of this application is a RAG (Retrieval-Augmented Generation) pipeline that enables long-term semantic memory. The diagram below illustrates the flow from user input to context-augmented inference:
+![System Architecture]<img width="551" height="453" alt="image" src="https://github.com/user-attachments/assets/b5aa3016-393a-431d-8fb8-22f9d98e0295" />
+
+### 🚀 How It Works (RAG Pipeline)
 
 ```
 User Input
