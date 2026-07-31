@@ -90,11 +90,16 @@ class Persona:
 
         user_name: str = self.data.get("user_name", "")
         if user_name:
-            prompt += f" The user's name is {user_name}."
+            prompt += (
+                f" The user's name is {user_name}. Always address the user as {user_name}."
+            )
 
         companion_name: str = self.data.get("companion_name", "")
         if companion_name:
-            prompt += f" The companion's name (your name) is {companion_name}."
+            prompt += (
+                f" The companion's name (your name) is {companion_name}. "
+                f"Always refer to yourself as {companion_name}."
+            )
 
         user_gender: str = self.data.get("user_gender", "")
         if user_gender:

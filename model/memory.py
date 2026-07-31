@@ -20,8 +20,6 @@ class Memory:
         self.archive_path = path 
         # The index path (FAISS)
         self.index_path = path.replace(".json", ".index")
-        # A mapping file to link FAISS vector IDs back to JSON message indices
-        self.mapping_path = path.replace(".json", "_map.json")
 
         self.messages: list[dict] = self._load_archive()
 
@@ -38,9 +36,8 @@ class Memory:
             cache_folder=str(embedding_cache_dir)
         )
         
-        # Initialize Index and Mapping
+        # Initialize Index
         self.index = None
-        self.mapping = self._load_mapping()
         self._load_index()
 
     # ------------------------------------------------------------------
@@ -55,13 +52,6 @@ class Memory:
                 pass
         return []
     
-    def _load_mapping(self) -> list[int]:
-        """Loads the list of JSON message indices that are currently in the FAISS index."""
-        if os.path.exists(self.mapping_path):
-            with open(self.mapping_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return []
-
     def _load_facts(self) -> list[str]:
         """Loads the fact strings that correspond 1:1 with the FAISS index vectors."""
         if os.path.exists(self.facts_path):
@@ -82,25 +72,21 @@ class Memory:
             self.index = faiss.IndexFlatL2(dimension)
 
     def save(self) -> None:
-        """Saves both the Archive and the Index mapping."""
+        """Saves both the Archive and the Index."""
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         # 1. Save JSON Archive
         with open(self.archive_path, "w", encoding="utf-8") as f:
             json.dump(self.messages, f, ensure_ascii=False, indent=4)
-        # 2. Save Mapping (which message index in JSON corresponds to which vector in FAISS)
-        with open(self.mapping_path, "w", encoding="utf-8") as f:
-            json.dump(self.mapping, f)
-        # 3. Save the fact strings for the FAISS index
+        # 2. Save the fact strings for the FAISS index
         with open(self.facts_path, "w", encoding="utf-8") as f:
             json.dump(self.facts, f, ensure_ascii=False, indent=4)
-        # 4. Save the FAISS Index itself
+        # 3. Save the FAISS Index itself
         if self.index is not None:
             faiss.write_index(self.index, self.index_path)
 
     def clear(self) -> None:
         """Wipes both the Archive and the Index."""
         self.messages = []
-        self.mapping = []
         self.facts = []
         self.index = faiss.IndexFlatL2(384)
         self.save()

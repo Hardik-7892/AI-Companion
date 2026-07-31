@@ -150,8 +150,8 @@ def save_details(
         companion_name    = companion_name or persona.data["companion_name"],
         personality_traits = traits or [],
         custom_personality = custom_personality or "",
-        user_gender = user_gender or "",
-        companion_gender = companion_gender or "Female",
+        user_gender        = user_gender or persona.data.get("user_gender", ""),
+        companion_gender   = companion_gender or persona.data.get("companion_gender", ""),
     )
     return f"Details saved for chat '{chat_id}'!"
 

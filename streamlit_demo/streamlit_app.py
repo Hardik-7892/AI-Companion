@@ -38,11 +38,16 @@ from app_utils import (
     save_details,
 )
 
-DETAIL_KEYS = (
-    "d_user_name", "d_companion_name", "d_user_gender",
-    "d_companion_gender", "d_traits", "d_custom",
-)
 from model import ClaudeLLM
+
+
+def detail_keys(chat_id: str) -> list[str]:
+    """Widget keys for the Enter Details form, scoped per chat so switching
+    chats can never leak another chat's values into the form."""
+    return [f"d_{n}_{chat_id}" for n in (
+        "user_name", "companion_name", "user_gender",
+        "companion_gender", "traits", "custom",
+    )]
 
 # --------------------------------------------------------------------------- #
 # Secrets -> environment
@@ -163,7 +168,7 @@ with st.sidebar:
     if st.button("Delete Chat Data", use_container_width=True):
         reset_chat(chat_id)
         get_cached_engine.clear()  # drop any stale in-memory engine/memory
-        for k in DETAIL_KEYS:
+        for k in detail_keys(chat_id):
             if k in st.session_state:
                 del st.session_state[k]
         st.session_state["_hist"][chat_id]   = []
@@ -173,15 +178,6 @@ with st.sidebar:
 # ---- Main ---------------------------------------------------------------- #
 st.title("Chat with Your AI Companion")
 
-# Keyed widgets keep their value across reruns, so a chat switch would leave
-# the "Enter Details" form showing the previous chat's inputs. Reset the widget
-# state whenever the selected chat changes so the form (re)builds from disk.
-if st.session_state.get("_prev_chat") != chat_id:
-    for k in DETAIL_KEYS:
-        if k in st.session_state:
-            del st.session_state[k]
-    st.session_state["_prev_chat"] = chat_id
-
 persona = load_persona(chat_id)
 p = persona.data
 
@@ -190,17 +186,17 @@ st.caption(status)
 
 with st.expander("Enter Details (Optional)"):
     c1, c2 = st.columns(2)
-    user_name_input   = c1.text_input("Your Name (Optional)", value=p.get("user_name", ""), key="d_user_name")
-    companion_name_input = c2.text_input("Companion's Name (Optional)", value=p.get("companion_name", ""), key="d_companion_name")
+    user_name_input   = c1.text_input("Your Name (Optional)", value=p.get("user_name", ""), key=f"d_user_name_{chat_id}")
+    companion_name_input = c2.text_input("Companion's Name (Optional)", value=p.get("companion_name", ""), key=f"d_companion_name_{chat_id}")
     c3, c4 = st.columns(2)
-    user_gender_input = c3.text_input("Your Gender (Optional)", value=p.get("user_gender", ""), key="d_user_gender")
-    companion_gender_input = c4.text_input("Companion's Gender (Optional)", value=p.get("companion_gender", ""), key="d_companion_gender")
-    traits_input = st.multiselect("Select one or more traits", PERSONALITY_CHOICES, default=p.get("personality_traits", []), key="d_traits")
+    user_gender_input = c3.text_input("Your Gender (Optional)", value=p.get("user_gender", ""), key=f"d_user_gender_{chat_id}")
+    companion_gender_input = c4.text_input("Companion's Gender (Optional)", value=p.get("companion_gender", ""), key=f"d_companion_gender_{chat_id}")
+    traits_input = st.multiselect("Select one or more traits", PERSONALITY_CHOICES, default=p.get("personality_traits", []), key=f"d_traits_{chat_id}")
     custom_personality_input = st.text_area(
         "Custom personality (Optional)",
         value=p.get("custom_personality", ""),
         placeholder="Describe how you want her to behave, tone, style, etc.",
-        key="d_custom",
+        key=f"d_custom_{chat_id}",
     )
     if st.button("Save Details", type="secondary"):
         st.success(save_details(
@@ -209,6 +205,36 @@ with st.expander("Enter Details (Optional)"):
             traits_input, custom_personality_input, chat_id,
         ))
         get_cached_engine.clear()  # drop stale engine so the persona reloads from disk
+        persona = load_persona(chat_id)  # reload so the caption/warning reflect the save
+        p = persona.data
+
+    _unsaved_text = {
+        "Your Name": user_name_input,
+        "Companion's Name": companion_name_input,
+        "Your Gender": user_gender_input,
+        "Companion's Gender": companion_gender_input,
+        "Custom personality": custom_personality_input,
+    }
+    _unsaved = any(
+        v and v != p.get(k)
+        for k, v in zip(("user_name", "companion_name", "user_gender",
+                         "companion_gender", "custom_personality"),
+                        _unsaved_text.values())
+    ) or sorted(traits_input or []) != sorted(p.get("personality_traits") or [])
+    if _unsaved:
+        st.warning(
+            "Details changed but **not saved** — the companion is still using "
+            "the previously saved details. Click **Save Details** to apply them."
+        )
+
+    _names = [n for n in (p.get("user_name"), p.get("companion_name")) if n]
+    _traits = p.get("personality_traits") or []
+    _parts = []
+    if _names:
+        _parts.append("name: " + " & ".join(_names))
+    if _traits:
+        _parts.append("traits: " + ", ".join(_traits))
+    st.caption(f"Saved for this chat{': ' + ' · '.join(_parts) if _parts else ' — none yet'}")
 
 for message in history:
     with st.chat_message(message["role"]):
