@@ -15,7 +15,7 @@ audio_models/
 chats.json
 
 # Streamlit secrets
-.streamlit/
+.streamlit/secrets.toml
 
 # OS
 .DS_Store
