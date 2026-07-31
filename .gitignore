@@ -14,9 +14,13 @@ tortoise_models/
 audio_models/
 chats.json
 
+# Streamlit secrets
+.streamlit/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
+

@@ -1,0 +1,17 @@
+# Lean dependency set for the Streamlit demo.
+# Streamlit Community Cloud reads THIS file because it sits next to the
+# entrypoint (streamlit_app.py); the root requirements.txt is for the Gradio
+# app and is intentionally left untouched (its heavier deps are not needed,
+# and the torchaudio==2.1.0 pin there would break a Cloud build).
+
+streamlit>=1.40
+
+# Claude (OpenRouter) backend via the Anthropic SDK
+anthropic>=0.120.0
+python-dotenv>=1.0.0
+
+# model/ imports these regardless of backend (llama_cpp, faiss,
+# sentence-transformers) — see model/__init__.py
+llama-cpp-python>=0.3.20
+faiss-cpu
+sentence-transformers

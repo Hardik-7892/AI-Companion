@@ -22,6 +22,7 @@ This version introduces a **modular architecture** with separate components for:
 * 🔁 **Multiple chat sessions**
 * 🎨 **UI themes** (Pink, Blue, Dark)
 * ⚡ **Efficient model caching** (load once, reuse)
+* 🖥️ **Two UIs, one brain**: Gradio (local) + an optional Streamlit demo — both share the same logic via `app_utils.py`.
 
 ---
 
@@ -29,7 +30,12 @@ This version introduces a **modular architecture** with separate components for:
 
 ```bash
 .
-├── app.py                      # Main Gradio app
+├── gradio_app.py               # Main Gradio app (python gradio_app.py)
+├── app_utils.py                # Shared logic used by both UIs
+│
+├── streamlit_demo/             # Optional Streamlit UI (see below)
+│   ├── streamlit_app.py        #   streamlit run streamlit_demo/streamlit_app.py
+│   └── requirements.txt        #   Lean deps for the Cloud deploy
 │
 ├── models/
 │   └── model.gguf             # Your GGUF model(s)
@@ -115,8 +121,10 @@ models/
 
 ### 5. Run the app
 
+**Gradio UI** (default):
+
 ```bash
-python app.py
+python gradio_app.py
 ```
 
 The app will open in your browser:
@@ -124,6 +132,15 @@ The app will open in your browser:
 ```bash
 http://127.0.0.1:7860
 ```
+
+**Optional Streamlit UI** — same logic, different frontend:
+
+```bash
+pip install -r streamlit_demo/requirements.txt
+streamlit run streamlit_demo/streamlit_app.py
+```
+
+It uses the same `.env`/`OPENROUTER_API_KEY` for the Claude backend.
 
 ---
 
@@ -213,6 +230,35 @@ The app runs on CPU out of the box. To use your NVIDIA GPU:
 3. Launch the app and raise the **GPU Layers** field in the Chat tab (see above).
 
 Models in `models/` are shared with the CPU setup — no re-download.
+
+---
+
+## ☁️ Deploy the Streamlit demo (free)
+
+The `streamlit_demo/` folder is a self-contained Streamlit port that can be
+hosted for free on [Streamlit Community Cloud](https://streamlit.io/cloud):
+
+1. Push this repo to GitHub.
+2. At Streamlit Cloud, **Create app** → connect the GitHub repo → set the
+   **Main file** to `streamlit_demo/streamlit_app.py`.
+3. Add your API key under the app's **Secrets** (Settings → Secrets):
+
+   ```toml
+   OPENROUTER_API_KEY = "sk-or-..."
+   ```
+
+4. Deploy. You get a public URL like `your-name/ai-companion.streamlit.app`.
+
+Notes:
+
+* The Cloud build uses `streamlit_demo/requirements.txt` (it sits next to the
+  entrypoint, which takes precedence over the root `requirements.txt`) — a
+  lean set that skips the heavier local-only deps.
+* Chat data lives in the app's filesystem and is **shared by all visitors**
+  (no per-user accounts). Don't use it for private data; messages are also
+  sent to OpenRouter.
+* The Local (GGUF) backend is hidden when no `.gguf` is in `models/` — the
+  demo then defaults to the Claude (OpenRouter) backend.
 
 ---
 
