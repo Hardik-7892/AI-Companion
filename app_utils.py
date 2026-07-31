@@ -197,7 +197,7 @@ def run_chat(
                 "folder (and restart) to use the Local (GGUF) backend."
             ), False
 
-    model_path = MODELS_DIR / model_name
+    model_path = MODELS_DIR / (model_name or "")
     n_gpu      = max(int(gpu_layers or 0), 0)
     if engine is None:
         engine = get_engine(
