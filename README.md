@@ -51,10 +51,12 @@ This version introduces a **modular architecture** with separate components for:
 │
 ├── chats.json                 # Stores list of chat IDs
 ├── tests/
-│   └── test_mock_llm.py       # Component tests (mocked LLM, no model needed)
+│   ├── test_mock_llm.py       # Component tests (mocked LLM, no model needed)
+│   └── test_real_model.py     # End-to-end RAG test (needs a .gguf in models/)
 ├── requirements.txt
 └── README.md
-```bash
+```
+
 ---
 > 💡 The embedding model (`all-MiniLM-L6-v2`) is auto-downloaded into `models/embeddings/` on first run.
 ---
@@ -62,6 +64,7 @@ This version introduces a **modular architecture** with separate components for:
 ## ⚙️ Setup
 
 ### 1. Clone the repo
+
 ```bash
 git clone https://github.com/Hardik-7892/AI-Companion.git
 cd AI-Companion
@@ -106,6 +109,7 @@ models/
 ```
 
 > ⚠️ Models are NOT included due to size constraints.
+> 💡 Model size matters for RAG — see [Model Recommendations](#-model-recommendations--limitations).
 
 ---
 
@@ -132,6 +136,54 @@ python tests/test_mock_llm.py
 ```
 
 Covers: Persona persistence/prompt building, the Memory archive + FAISS + semantic search round-trip, and ChatEngine `||` fact parsing with the double-write (archive + index).
+
+With a GGUF model in `models/`, also run the end-to-end RAG test (skips cleanly if no model is present):
+
+```bash
+python tests/test_real_model.py
+```
+
+---
+
+## 🤖 Model Recommendations & Limitations
+
+The app runs any GGUF **instruct** model, but model size matters a lot — especially for RAG:
+
+| Model size            | RAG (`||` fact extraction) | Notes |
+|-----------------------|----------------------------|-------|
+| ≤ 0.5B                | ❌ Usually fails            | Chats fine, but ignores the `||` fact format → long-term memory is silently disabled. |
+| 1.5B (Q4_K_M, ~1 GB)  | ✅ Works                    | **Minimum tested**: `Qwen2.5-1.5B-Instruct` Q4_K_M. |
+| 3B – 8B               | ✅ Best                     | Recommended for natural replies + reliable fact extraction. |
+
+Key facts:
+
+* **Parameter count**: RAG depends on the model reliably following the strict `[chat] || [fact]` output format. Models under ~1B often ignore it — they chat, but never store memories.
+* **Quantization**: prefer `Q4_K_M` / `Q5` GGUFs for a good quality-vs-size balance.
+* **Context window**: defaults to `n_ctx=2048` (`model/llm.py`).
+* **GPU speed setting (GPU Layers field)**: By default the app runs on your processor (CPU) with `0` — this works on any computer. If you have an NVIDIA graphics card (GPU) and want faster replies, raise the number in the **GPU Layers** field in the Chat tab (e.g. `15`). The number controls how much work is handed to your GPU; higher is faster but uses more graphics card memory. If replies crash or freeze, or you see an "out of memory" error, set it back to `0`. It caps automatically at your model's limit, so picking a big number just means "use all of the GPU you can". The setting takes effect on the next model load; changing it mid-session loads a second instance.
+* **RAM**: rough guide ≈ 1 GB per 1B parameters at Q4 quantization.
+
+Example — download the tested minimum model:
+
+```bash
+python -c "from huggingface_hub import hf_hub_download; hf_hub_download('Qwen/Qwen2.5-1.5B-Instruct-GGUF', 'qwen2.5-1.5b-instruct-q4_k_m.gguf', local_dir='models')"
+```
+
+### GPU setup (optional)
+
+The app runs on CPU out of the box. To use your NVIDIA GPU:
+
+1. Create a dedicated environment:
+
+   ```bash
+   conda create -n aigf_gpu python=3.11 -y
+   conda activate aigf_gpu
+   ```
+
+2. Follow the install steps in [`requirements-gpu.txt`](requirements-gpu.txt) (CUDA-enabled torch + `llama-cpp-python` from conda-forge, then the app dependencies — **not** `requirements.txt`, which would downgrade the CUDA torch).
+3. Launch the app and raise the **GPU Layers** field in the Chat tab (see above).
+
+Models in `models/` are shared with the CPU setup — no re-download.
 
 ---
 
