@@ -29,8 +29,12 @@ PERSONALITY_CHOICES = [
 # Engine factory
 # --------------------------------------------------------------------------- #
 
-def get_engine(chat_id: str, model_path: str | Path) -> ChatEngine:
-    llm     = LLM.get_instance(str(model_path))
+def get_engine(
+    chat_id: str,
+    model_path: str | Path,
+    n_gpu_layers: int = 0,
+) -> ChatEngine:
+    llm     = LLM.get_instance(str(model_path), n_gpu_layers=n_gpu_layers)
     persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
     memory  = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
     return ChatEngine(llm=llm, memory=memory, persona=persona)
@@ -142,13 +146,16 @@ def chat_page(
     history: list[dict],
     chat_id: str,
     model_name: str,
+    gpu_layers: float,
 ) -> tuple[str, list[dict], str]:
     if not user_input.strip():
         return user_input, history or [], ""
 
     history    = history or []
     model_path = MODELS_DIR / model_name
-    engine     = get_engine(chat_id, model_path)
+    n_gpu      = int(gpu_layers or 0)
+    n_gpu      = max(n_gpu, 0)  # negatives would crash the backend
+    engine     = get_engine(chat_id, model_path, n_gpu_layers=n_gpu)
     reply      = engine.chat(user_input)
 
     history.append({"role": "user",      "content": user_input})
@@ -324,6 +331,16 @@ def launch_gradio_app() -> None:
                         choices=model_files, label="Choose Model",
                         value=model_files[0] if model_files else None,
                     )
+                    gpu_layers_input = gr.Number(
+                        label="GPU Layers",
+                        value=0,
+                        precision=0,
+                        info="Speed setting. 0 = run on your processor (CPU), "
+                             "which works on any computer. Increase the number "
+                             "to use your graphics card (GPU) for faster "
+                             "replies. If replies crash or freeze, set it back "
+                             "to 0. A good starting point for most laptops is 15.",
+                    )
                     chat_input = gr.Textbox(
                         label="Your Message", placeholder="Say something...", lines=2
                     )
@@ -352,7 +369,7 @@ def launch_gradio_app() -> None:
                         outputs=[chatbot, history_status],
                     )
 
-                    shared_inputs  = [chat_input, chatbot, chat_selector, model_selector]
+                    shared_inputs  = [chat_input, chatbot, chat_selector, model_selector, gpu_layers_input]
                     shared_outputs = [chat_input, chatbot, history_status]
 
                     chat_input.submit(fn=chat_page, inputs=shared_inputs, outputs=shared_outputs)

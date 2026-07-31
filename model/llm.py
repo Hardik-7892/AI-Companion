@@ -22,7 +22,7 @@ class LLM:
         model_path: str,
         n_ctx: int = 2048,
         n_threads: int = 8,
-        n_gpu_layers: int = 35,
+        n_gpu_layers: int = 0,
     ) -> None:
         self.model_path = model_path
         self._model = Llama(
@@ -42,13 +42,13 @@ class LLM:
         model_path: str,
         n_ctx: int = 2048,
         n_threads: int = 8,
-        n_gpu_layers: int = 35,
+        n_gpu_layers: int = 0,
     ) -> "LLM":
         """Return a cached LLM for *model_path*, creating one if needed."""
-        key = str(model_path)
+        key = (str(model_path), n_gpu_layers)
         if key not in cls._cache:
             cls._cache[key] = cls(
-                model_path=key,
+                model_path=str(model_path),
                 n_ctx=n_ctx,
                 n_threads=n_threads,
                 n_gpu_layers=n_gpu_layers,
