@@ -26,7 +26,8 @@ This version introduces a **modular architecture** with separate components for:
 ---
 
 ## 📁 Project Structure
-```
+
+```bash
 .
 ├── app.py                      # Main Gradio app
 │
@@ -44,13 +45,18 @@ This version introduces a **modular architecture** with separate components for:
 │   └── <chat_id>/
 │       ├── memory.json        # The 'Archive' (Full text history)
 │       ├── memory.index       # The 'Vector Index' (FAISS)
-│       ├── memory_map.json    # Vector-to-Text mapping
+│       ├── memory_facts.json  # Fact text, 1:1 with the FAISS vectors
+│       ├── memory_map.json    # Legacy vector-to-message mapping (unused for retrieval)
 │       └── persona.json
 │
 ├── chats.json                 # Stores list of chat IDs
+├── tests/
+│   └── test_mock_llm.py       # Component tests (mocked LLM, no model needed)
 ├── requirements.txt
 └── README.md
-```
+```bash
+---
+> 💡 The embedding model (`all-MiniLM-L6-v2`) is auto-downloaded into `models/embeddings/` on first run.
 ---
 
 ## ⚙️ Setup
@@ -64,16 +70,20 @@ cd AI-Companion
 ---
 
 ### 2. Create virtual environment
+
 ```bash
 python -m venv venv
 ```
+
 Activate it:
+
 * **Windows**: `venv\Scripts\activate`
 * **macOS/Linux**: `source venv/bin/activate`
 
 ---
 
 ### 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -84,13 +94,13 @@ pip install -r requirements.txt
 
 Place your `.gguf` file(s) inside:
 
-```
+```bash
 models/
 ```
 
 Example:
 
-```
+```bash
 models/
 ├── llama-3-8b-instruct.Q4_K_M.gguf
 ```
@@ -107,19 +117,32 @@ python app.py
 
 The app will open in your browser:
 
-```
+```bash
 http://127.0.0.1:7860
 ```
 
 ---
 
+## 🧪 Testing
+
+Run the component tests (they use a mocked LLM, so no GGUF model is required):
+
+```bash
+python tests/test_mock_llm.py
+```
+
+Covers: Persona persistence/prompt building, the Memory archive + FAISS + semantic search round-trip, and ChatEngine `||` fact parsing with the double-write (archive + index).
+
+---
+
 ## System Architecture
+
 The core of this application is a RAG (Retrieval-Augmented Generation) pipeline that enables long-term semantic memory. The diagram below illustrates the flow from user input to context-augmented inference:
 ![System Architecture]<img width="551" height="453" alt="image" src="https://github.com/user-attachments/assets/b5aa3016-393a-431d-8fb8-22f9d98e0295" />
 
 ### 🚀 How It Works (RAG Pipeline)
 
-```
+```bash
 User Input
    ↓
 [Retriever] → Search FAISS Index for semantically similar "knowledge nuggets"
@@ -139,26 +162,31 @@ User Input
 
 ## 🛠️ Core Components
 
-#### 🔹 `LLM` (model/llm.py)
+### 🔹 `LLM` (model/llm.py)
+
 * Wraps `llama_cpp.Llama`
 * Uses **class-level caching** → model loads only once
 
-#### 🔹 `Memory` (model/memory.py) - **The RAG Engine**
+### 🔹 `Memory` (model/memory.py) - **The RAG Engine**
+
 * **Archive**: JSON file containing the complete conversation log.
 * **Librarian (Retriever)**: Uses `SentenceTransformer` to vectorize queries and facts.
 * **Index (Vector DB)**: `FAISS` index for high-speed semantic similarity search.
 
-#### 🔹 `Persona` (model/persona.py)
+### 🔹 `Persona` (model/persona.py)
+
 * Builds dynamic **system prompt**
 * Supports: Names, Genders, Personality Traits, and Custom Descriptions.
 
-#### 🔹 `ChatEngine` (model/chat_engine.py) - **The Orchestrator**
+### 🔹 `ChatEngine` (model/chat_engine.py) - **The Orchestrator**
+
 * Performs the **RAG augmentation** step by calling `Memory.search()` and appending results to the context window.
 * Handles the logic of parsing "Facts" from LLM output to update the Vector Index.
 
 ---
 
 ## 💡 Usage
+
 1. Select or create a chat
 2. (Optional) Configure:
    * Your name and gender
@@ -170,12 +198,14 @@ User Input
 ---
 
 ## 🧠 Memory Behavior
+
 * **Short-term Context**: The last **N pairs** are always loaded into the LLM context window for immediate flow.
 * **Long-term Retrieval (RAG)**: When you mention something from much earlier in the chat, the system retrieves the relevant "knowledge nugget" from the FAISS index and injects it into the current prompt.
 
 ---
 
 ## 🔮 Roadmap
+
 * 🔍 Semantic memory expansion (larger vector chunks)
 * 🎤 Speech-to-text (Whisper)
 * 🔊 Text-to-speech

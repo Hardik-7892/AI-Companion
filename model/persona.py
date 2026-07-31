@@ -105,7 +105,7 @@ class Persona:
 
         companion_name: str = self.data.get("companion_name", "")
         if companion_name:
-            prompt += f" The girlfriend's name (your name) is {companion_name}."
+            prompt += f" The companion's name (your name) is {companion_name}."
 
         user_gender: str = self.data.get("user_gender", "")
         if user_gender:

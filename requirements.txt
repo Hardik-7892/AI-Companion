@@ -4,13 +4,13 @@ llama-cpp-python>=0.3.20
 
 # Offline Speech-to-text (Whisper via faster-whisper)
 faster-whisper
-torch==1.13.0
-torchaudio==1.13.0
+torch==2.10.0
+torchaudio==2.1.0
 
 # Offline TTS (Tortoise TTS for human-like voice)
 # tortoise-tts>=3.0.0
 TTS>=0.21.0
-transformers==4.56.2
+transformers==5.5.0
 simpleaudio 
 
 # Audio handling
