@@ -5,7 +5,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from model import LLM, ChatEngine, Memory, Persona
+from model import ClaudeLLM, LLM, ChatEngine, Memory, Persona
 
 # --------------------------------------------------------------------------- #
 # Config
@@ -24,6 +24,8 @@ PERSONALITY_CHOICES = [
     "Supportive", "Jealous", "Clingy", "Mature", "Tsundere",
 ]
 
+BACKEND_CHOICES = ["Local (GGUF)", "Claude (OpenRouter)"]
+
 
 # --------------------------------------------------------------------------- #
 # Engine factory
@@ -33,8 +35,13 @@ def get_engine(
     chat_id: str,
     model_path: str | Path,
     n_gpu_layers: int = 0,
+    backend: str = "Local (GGUF)",
+    claude_model: str = ClaudeLLM.DEFAULT_MODEL,
 ) -> ChatEngine:
-    llm     = LLM.get_instance(str(model_path), n_gpu_layers=n_gpu_layers)
+    if backend == "Claude (OpenRouter)":
+        llm = ClaudeLLM(model=claude_model or ClaudeLLM.DEFAULT_MODEL)
+    else:
+        llm = LLM.get_instance(str(model_path), n_gpu_layers=n_gpu_layers)
     persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
     memory  = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
     return ChatEngine(llm=llm, memory=memory, persona=persona)
@@ -147,15 +154,31 @@ def chat_page(
     chat_id: str,
     model_name: str,
     gpu_layers: float,
+    backend: str,
+    claude_model: str,
 ) -> tuple[str, list[dict], str]:
     if not user_input.strip():
         return user_input, history or [], ""
+
+    if backend == "Claude (OpenRouter)":
+        import os
+
+        if not os.environ.get("OPENROUTER_API_KEY"):
+            return (
+                user_input,
+                history or [],
+                "Set your key first: add OPENROUTER_API_KEY to .env "
+                "(see README) and restart the app.",
+            )
 
     history    = history or []
     model_path = MODELS_DIR / model_name
     n_gpu      = int(gpu_layers or 0)
     n_gpu      = max(n_gpu, 0)  # negatives would crash the backend
-    engine     = get_engine(chat_id, model_path, n_gpu_layers=n_gpu)
+    engine     = get_engine(
+        chat_id, model_path, n_gpu_layers=n_gpu,
+        backend=backend, claude_model=claude_model,
+    )
     reply      = engine.chat(user_input)
 
     history.append({"role": "user",      "content": user_input})
@@ -174,6 +197,20 @@ def reset_chat(chat_id: str) -> tuple[list, str]:
     memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
     memory.clear()
     return [], "History cleared."
+
+
+def update_settings(backend: str) -> tuple:
+    """
+    Enable/disable sidebar controls depending on the selected backend.
+    Local (GGUF) needs the model + GPU layers; Claude (OpenRouter) needs
+    the model slug.
+    """
+    is_claude = backend == "Claude (OpenRouter)"
+    return (
+        gr.update(interactive=is_claude),       # claude_model_input
+        gr.update(interactive=not is_claude),   # model_selector
+        gr.update(interactive=not is_claude),   # gpu_layers_input
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -213,6 +250,7 @@ body[data-theme="dark"] #chatbot-block .gradio-chatbot { background:#020617; bor
 #chat-selector-row { padding:.75rem 1rem; border-radius:.75rem; border-width:1px; }
 #tabs-container    { border-radius:.75rem; padding:.75rem; border-width:1px; }
 #chatbot-block .gradio-chatbot { border-radius:.75rem; border-width:1px; }
+#chat-sidebar { background:#ffffff; border:1px solid #f9a8d4; border-radius:.75rem; padding:.75rem; }
 button { border-radius:9999px !important; }
 """
 
@@ -310,43 +348,71 @@ def launch_gradio_app() -> None:
 
                 # ---- Tab 2: Chat -------------------------------------------
                 with gr.TabItem("Chat"):
-                    gr.Markdown("### Chat with Your AI Companion")
-
-                    # Status bar: shows how many exchanges are loaded vs total
-                    history_status = gr.Textbox(
-                        value="", interactive=False, show_label=False,
-                        container=False, elem_id="history-status"
-                    )
-                    load_all_btn = gr.Button(
-                        "📜 Load All History", variant="secondary", size="sm"
-                    )
-
-                    with gr.Column(elem_id="chatbot-block"):
-                        chatbot = gr.Chatbot(
-                            label="Conversation", height=520
-                        )
-
-                    model_files = [f.name for f in MODELS_DIR.glob("*.gguf")]
-                    model_selector = gr.Dropdown(
-                        choices=model_files, label="Choose Model",
-                        value=model_files[0] if model_files else None,
-                    )
-                    gpu_layers_input = gr.Number(
-                        label="GPU Layers",
-                        value=0,
-                        precision=0,
-                        info="Speed setting. 0 = run on your processor (CPU), "
-                             "which works on any computer. Increase the number "
-                             "to use your graphics card (GPU) for faster "
-                             "replies. If replies crash or freeze, set it back "
-                             "to 0. A good starting point for most laptops is 15.",
-                    )
-                    chat_input = gr.Textbox(
-                        label="Your Message", placeholder="Say something...", lines=2
-                    )
                     with gr.Row():
-                        send_btn  = gr.Button("Send",              variant="primary")
-                        reset_btn = gr.Button("Delete Chat Data",        variant="secondary")
+                        # Left sidebar: config + actions
+                        with gr.Column(scale=0, min_width=300, elem_id="chat-sidebar"):
+                            model_files = [f.name for f in MODELS_DIR.glob("*.gguf")]
+                            backend_selector = gr.Dropdown(
+                                choices=BACKEND_CHOICES, label="Backend",
+                                value=BACKEND_CHOICES[0],
+                                info="Local (GGUF) runs on your computer for "
+                                     "free. Claude (OpenRouter) uses "
+                                     "Anthropic's Claude SDK routed through "
+                                     "OpenRouter — set OPENROUTER_API_KEY in "
+                                     ".env first.",
+                            )
+                            model_selector = gr.Dropdown(
+                                choices=model_files, label="Choose Model",
+                                value=model_files[0] if model_files else None,
+                            )
+                            claude_model_input = gr.Textbox(
+                                label="OpenRouter Model",
+                                value=ClaudeLLM.DEFAULT_MODEL,
+                                interactive=False,
+                                info="Only used with the Claude backend. "
+                                     "Default is a free Gemma model. Try "
+                                     "'openrouter/free' to auto-pick, or any "
+                                     "slug, e.g. "
+                                     "'anthropic/claude-sonnet-5'.",
+                            )
+                            gpu_layers_input = gr.Number(
+                                label="GPU Layers",
+                                value=0,
+                                precision=0,
+                                info="Speed setting. 0 = run on your processor "
+                                     "(CPU), which works on any computer. "
+                                     "Increase the number to use your graphics "
+                                     "card (GPU) for faster replies. If replies "
+                                     "crash or freeze, set it back to 0. A good "
+                                     "starting point for most laptops is 15.",
+                            )
+                            load_all_btn = gr.Button(
+                                "📜 Load All History", variant="secondary", size="sm"
+                            )
+                            reset_btn = gr.Button(
+                                "Delete Chat Data", variant="secondary"
+                            )
+
+                        # Right: the conversation
+                        with gr.Column(elem_id="chat-main"):
+                            gr.Markdown("### Chat with Your AI Companion")
+
+                            # Status bar: shows how many exchanges are loaded vs total
+                            history_status = gr.Textbox(
+                                value="", interactive=False, show_label=False,
+                                container=False, elem_id="history-status"
+                            )
+
+                            with gr.Column(elem_id="chatbot-block"):
+                                chatbot = gr.Chatbot(
+                                    label="Conversation", height=520
+                                )
+
+                            chat_input = gr.Textbox(
+                                label="Your Message", placeholder="Say something...", lines=2
+                            )
+                            with gr.Row():
+                                send_btn = gr.Button("Send", variant="primary")
 
                     # When the selected chat changes → load latest N into chatbot
                     chat_selector.change(
@@ -369,7 +435,14 @@ def launch_gradio_app() -> None:
                         outputs=[chatbot, history_status],
                     )
 
-                    shared_inputs  = [chat_input, chatbot, chat_selector, model_selector, gpu_layers_input]
+                    # Enable/disable controls based on the selected backend
+                    backend_selector.change(
+                        fn=update_settings,
+                        inputs=[backend_selector],
+                        outputs=[claude_model_input, model_selector, gpu_layers_input],
+                    )
+
+                    shared_inputs  = [chat_input, chatbot, chat_selector, model_selector, gpu_layers_input, backend_selector, claude_model_input]
                     shared_outputs = [chat_input, chatbot, history_status]
 
                     chat_input.submit(fn=chat_page, inputs=shared_inputs, outputs=shared_outputs)
