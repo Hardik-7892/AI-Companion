@@ -169,6 +169,35 @@ Example — download the tested minimum model:
 python -c "from huggingface_hub import hf_hub_download; hf_hub_download('Qwen/Qwen2.5-1.5B-Instruct-GGUF', 'qwen2.5-1.5b-instruct-q4_k_m.gguf', local_dir='models')"
 ```
 
+---
+
+## ☁️ Claude (OpenRouter) backend
+
+The app can also use **Anthropic's Claude SDK** routed through **OpenRouter** —
+no local GGUF model, no Anthropic account or credit card required.
+
+1. Create an account + API key at [openrouter.ai/keys](https://openrouter.ai/keys) (starts with `sk-or-...`; shown only once).
+2. Copy `.env.example` to `.env` and paste your key (`.env` is git-ignored):
+
+   ```bash
+   # .env
+   OPENROUTER_API_KEY=sk-or-...
+   ```
+
+3. In the app, set **Backend** to **Claude (OpenRouter)**. The **OpenRouter Model** field lets you pick any slug:
+   * `google/gemma-4-26b-a4b-it:free` — default; a tested, reliable free model ($0)
+   * `openrouter/free` — auto-selects a free model at random (quality varies)
+   * `anthropic/claude-sonnet-5` — real Claude via OpenRouter (paid, cheap)
+   * any other slug from [openrouter.ai/models](https://openrouter.ai/models)
+
+Notes:
+
+* **Why OpenRouter?** The Anthropic SDK accepts a `base_url`; OpenRouter exposes an Anthropic-compatible endpoint at `https://openrouter.ai/api`. The SDK appends `/v1/messages` itself, so the URL must **not** include `/v1` (that suffix is for OpenAI-style SDKs and would 404). The original Anthropic-first config is kept commented in `model/claude_llm.py` if you ever want to point at `api.anthropic.com` directly.
+* Free models have low rate limits (~50 requests/day without credits; higher if you add credits) — fine for exploring, not for production.
+* The Claude backend reuses the same `ChatEngine`/`Memory`/`Persona` pipeline, including `|| [fact]` RAG extraction.
+
+---
+
 ### GPU setup (optional)
 
 The app runs on CPU out of the box. To use your NVIDIA GPU:
