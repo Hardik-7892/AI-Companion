@@ -98,20 +98,25 @@ st.warning(
 
 chat_ids = load_chat_ids()
 
+def on_create_chat() -> None:
+    ids, selected, message = create_chat_id(
+        st.session_state.get("new_chat_name", ""),
+        st.session_state.get("chat_id"),
+    )
+    st.session_state["chat_id"] = selected
+    st.session_state["_flash"] = message
+    st.session_state["new_chat_name"] = ""
+
 # ---- Sidebar ------------------------------------------------------------- #
 with st.sidebar:
     st.title("💗 AI Companion")
 
     current = st.session_state.get("chat_id")
-    index   = chat_ids.index(current) if current in chat_ids else 0
+    index = chat_ids.index(current) if current in chat_ids else 0
     chat_id = st.selectbox("Select chat", chat_ids, index=index, key="chat_id")
 
-    new_name = st.text_input("New chat name", placeholder="e.g. Chat 2")
-    if st.button("Create Chat", type="primary", use_container_width=True):
-        ids, selected, message = create_chat_id(new_name, chat_id)
-        st.session_state["chat_id"] = selected
-        st.session_state["_flash"]  = message
-        st.rerun()
+    st.text_input("New chat name", placeholder="e.g. Chat 2", key="new_chat_name")
+    st.button("Create Chat", type="primary", use_container_width=True, on_click=on_create_chat)
 
     if "_flash" in st.session_state:
         st.success(st.session_state.pop("_flash"))
