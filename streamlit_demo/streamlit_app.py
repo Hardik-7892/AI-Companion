@@ -186,6 +186,7 @@ with st.expander("Enter Details (Optional)"):
             user_gender_input, companion_gender_input,
             traits_input, custom_personality_input, chat_id,
         ))
+        get_cached_engine.clear()  # drop stale engine so the persona reloads from disk
 
 for message in history:
     with st.chat_message(message["role"]):
