@@ -31,10 +31,16 @@ from app_utils import (
     get_engine,
     load_all_history,
     load_chat_ids,
+    load_persona,
     load_recent_history,
     reset_chat,
     run_chat,
     save_details,
+)
+
+DETAIL_KEYS = (
+    "d_user_name", "d_companion_name", "d_user_gender",
+    "d_companion_gender", "d_traits", "d_custom",
 )
 from model import ClaudeLLM
 
@@ -157,6 +163,9 @@ with st.sidebar:
     if st.button("Delete Chat Data", use_container_width=True):
         reset_chat(chat_id)
         get_cached_engine.clear()  # drop any stale in-memory engine/memory
+        for k in DETAIL_KEYS:
+            if k in st.session_state:
+                del st.session_state[k]
         st.session_state["_hist"][chat_id]   = []
         st.session_state["_status"][chat_id] = "History cleared."
         st.rerun()
@@ -164,19 +173,32 @@ with st.sidebar:
 # ---- Main ---------------------------------------------------------------- #
 st.title("Chat with Your AI Companion")
 
+# Keyed widgets keep their value across reruns, so a chat switch would leave
+# the "Enter Details" form showing the previous chat's inputs. Reset the widget
+# state whenever the selected chat changes so the form (re)builds from disk.
+if st.session_state.get("_prev_chat") != chat_id:
+    for k in DETAIL_KEYS:
+        if k in st.session_state:
+            del st.session_state[k]
+    st.session_state["_prev_chat"] = chat_id
+
+persona = load_persona(chat_id)
+p = persona.data
+
 history, status = chat_state(chat_id)
 st.caption(status)
 
 with st.expander("Enter Details (Optional)"):
     c1, c2 = st.columns(2)
-    user_name_input   = c1.text_input("Your Name (Optional)", key="d_user_name")
-    companion_name_input = c2.text_input("Companion's Name (Optional)", key="d_companion_name")
+    user_name_input   = c1.text_input("Your Name (Optional)", value=p.get("user_name", ""), key="d_user_name")
+    companion_name_input = c2.text_input("Companion's Name (Optional)", value=p.get("companion_name", ""), key="d_companion_name")
     c3, c4 = st.columns(2)
-    user_gender_input = c3.text_input("Your Gender (Optional)", key="d_user_gender")
-    companion_gender_input = c4.text_input("Companion's Gender (Optional)", key="d_companion_gender")
-    traits_input = st.multiselect("Select one or more traits", PERSONALITY_CHOICES, key="d_traits")
+    user_gender_input = c3.text_input("Your Gender (Optional)", value=p.get("user_gender", ""), key="d_user_gender")
+    companion_gender_input = c4.text_input("Companion's Gender (Optional)", value=p.get("companion_gender", ""), key="d_companion_gender")
+    traits_input = st.multiselect("Select one or more traits", PERSONALITY_CHOICES, default=p.get("personality_traits", []), key="d_traits")
     custom_personality_input = st.text_area(
         "Custom personality (Optional)",
+        value=p.get("custom_personality", ""),
         placeholder="Describe how you want her to behave, tone, style, etc.",
         key="d_custom",
     )

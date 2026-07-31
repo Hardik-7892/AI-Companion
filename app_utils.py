@@ -56,6 +56,11 @@ def get_engine(
     return ChatEngine(llm=llm, memory=memory, persona=persona)
 
 
+def load_persona(chat_id: str) -> Persona:
+    """Load the persisted persona for a chat (used by the UIs to prefill forms)."""
+    return Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
+
+
 # --------------------------------------------------------------------------- #
 # Chat-list helpers
 # --------------------------------------------------------------------------- #
