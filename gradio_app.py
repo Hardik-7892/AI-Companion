@@ -1,68 +1,28 @@
-# app.py
-
-import json
-from pathlib import Path
+# gradio_app.py
+#
+# Gradio UI for AI Companion. Launch with: python gradio_app.py
+# Shared logic lives in app_utils.py (also used by streamlit_demo/streamlit_app.py).
 
 import gradio as gr
 
-from model import ClaudeLLM, LLM, ChatEngine, Memory, Persona
-
-# --------------------------------------------------------------------------- #
-# Config
-# --------------------------------------------------------------------------- #
-
-CHATS_FILE  = "chats.json"
-CHATS_BASE  = "chats"
-MODELS_DIR  = Path("./models")
-
-# Number of user-assistant pairs shown in the chat panel on load.
-# The full log is always in memory.json; this only controls the UI default.
-N_RECENT_UI: int = 10
-
-PERSONALITY_CHOICES = [
-    "Playful", "Affectionate", "Shy", "Confident", "Teasing",
-    "Supportive", "Jealous", "Clingy", "Mature", "Tsundere",
-]
-
-BACKEND_CHOICES = ["Local (GGUF)", "Claude (OpenRouter)"]
-
-
-# --------------------------------------------------------------------------- #
-# Engine factory
-# --------------------------------------------------------------------------- #
-
-def get_engine(
-    chat_id: str,
-    model_path: str | Path,
-    n_gpu_layers: int = 0,
-    backend: str = "Local (GGUF)",
-    claude_model: str = ClaudeLLM.DEFAULT_MODEL,
-) -> ChatEngine:
-    if backend == "Claude (OpenRouter)":
-        llm = ClaudeLLM(model=claude_model or ClaudeLLM.DEFAULT_MODEL)
-    else:
-        llm = LLM.get_instance(str(model_path), n_gpu_layers=n_gpu_layers)
-    persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
-    memory  = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
-    return ChatEngine(llm=llm, memory=memory, persona=persona)
+from app_utils import (
+    BACKEND_CHOICES,
+    PERSONALITY_CHOICES,
+    available_model_files,
+    create_chat_id,
+    load_all_history,
+    load_chat_ids,
+    load_recent_history,
+    reset_chat,
+    run_chat,
+    save_details,
+)
+from model import ClaudeLLM
 
 
 # --------------------------------------------------------------------------- #
 # Chat-list helpers
 # --------------------------------------------------------------------------- #
-
-def load_chat_ids() -> list[str]:
-    try:
-        with open(CHATS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return ["default"]
-
-
-def save_chat_ids(chat_ids: list[str]) -> None:
-    with open(CHATS_FILE, "w", encoding="utf-8") as f:
-        json.dump(chat_ids, f, ensure_ascii=False, indent=4)
-
 
 def refresh_chat_selector() -> gr.update:
     """
@@ -78,70 +38,8 @@ def create_chat(new_name: str, current_value: str):
     current_value is the Dropdown's *selected value* (a string), not its choices.
     We always read the authoritative list from disk.
     """
-    new_name  = (new_name or "").strip()
-    chat_ids  = load_chat_ids()
-
-    if new_name and new_name not in chat_ids:
-        chat_ids.append(new_name)
-        save_chat_ids(chat_ids)
-        return gr.update(choices=chat_ids, value=new_name), f"Chat '{new_name}' created."
-
-    if new_name in chat_ids:
-        # User typed an existing name — just switch to it silently
-        return gr.update(choices=chat_ids, value=new_name), f"Switched to '{new_name}'."
-
-    return gr.update(choices=chat_ids, value=current_value), "Enter a unique chat name."
-
-
-# --------------------------------------------------------------------------- #
-# History helpers
-# --------------------------------------------------------------------------- #
-
-def _history_status(shown: int, total: int) -> str:
-    if shown >= total:
-        return f"All {total} exchanges loaded."
-    return f"Showing latest {shown} of {total} exchanges — click 'Load All History' to see more."
-
-
-def load_recent_history(chat_id: str) -> tuple[list[dict], str]:
-    """Load the last N_RECENT_UI pairs into the chatbot panel."""
-    memory     = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
-    total      = memory.pair_count()
-    recent     = memory.get_recent(N_RECENT_UI)
-    shown      = len(recent) // 2
-    return recent, _history_status(shown, total)
-
-
-def load_all_history(chat_id: str) -> tuple[list[dict], str]:
-    """Load every message for this chat into the chatbot panel."""
-    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
-    total  = memory.pair_count()
-    return memory.get_all(), _history_status(total, total)
-
-
-# --------------------------------------------------------------------------- #
-# Persona / details tab
-# --------------------------------------------------------------------------- #
-
-def save_details(
-    user_name: str,
-    companion_name: str,
-    user_gender: str,
-    companion_gender: str,
-    traits: list[str],
-    custom_personality: str,
-    chat_id: str,
-) -> str:
-    persona = Persona(path=f"{CHATS_BASE}/{chat_id}/persona.json")
-    persona.update(
-        user_name          = user_name or persona.data["user_name"],
-        companion_name    = companion_name or persona.data["companion_name"],
-        personality_traits = traits or [],
-        custom_personality = custom_personality or "",
-        user_gender = user_gender or "",
-        companion_gender = companion_gender or "Female",
-    )
-    return f"Details saved for chat '{chat_id}'!"
+    chat_ids, selected, message = create_chat_id(new_name, current_value)
+    return gr.update(choices=chat_ids, value=selected), message
 
 
 # --------------------------------------------------------------------------- #
@@ -157,46 +55,11 @@ def chat_page(
     backend: str,
     claude_model: str,
 ) -> tuple[str, list[dict], str]:
-    if not user_input.strip():
-        return user_input, history or [], ""
-
-    if backend == "Claude (OpenRouter)":
-        import os
-
-        if not os.environ.get("OPENROUTER_API_KEY"):
-            return (
-                user_input,
-                history or [],
-                "Set your key first: add OPENROUTER_API_KEY to .env "
-                "(see README) and restart the app.",
-            )
-
-    history    = history or []
-    model_path = MODELS_DIR / model_name
-    n_gpu      = int(gpu_layers or 0)
-    n_gpu      = max(n_gpu, 0)  # negatives would crash the backend
-    engine     = get_engine(
-        chat_id, model_path, n_gpu_layers=n_gpu,
-        backend=backend, claude_model=claude_model,
+    history, status, handled = run_chat(
+        user_input, history, chat_id, model_name, gpu_layers, backend, claude_model
     )
-    reply      = engine.chat(user_input)
-
-    history.append({"role": "user",      "content": user_input})
-    history.append({"role": "assistant", "content": reply})
-
-    # Update the status line with new totals
-    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
-    total  = memory.pair_count()
-    shown  = len(history) // 2
-    status = _history_status(shown, total)
-
-    return "", history, status
-
-
-def reset_chat(chat_id: str) -> tuple[list, str]:
-    memory = Memory(path=f"{CHATS_BASE}/{chat_id}/memory.json")
-    memory.clear()
-    return [], "History cleared."
+    # Keep the user's text on error (key missing, no model, empty input).
+    return ("" if handled else user_input), history, status
 
 
 def update_settings(backend: str) -> tuple:
@@ -351,7 +214,7 @@ def launch_gradio_app() -> None:
                     with gr.Row():
                         # Left sidebar: config + actions
                         with gr.Column(scale=0, min_width=300, elem_id="chat-sidebar"):
-                            model_files = [f.name for f in MODELS_DIR.glob("*.gguf")]
+                            model_files = available_model_files()
                             backend_selector = gr.Dropdown(
                                 choices=BACKEND_CHOICES, label="Backend",
                                 value=BACKEND_CHOICES[0],
