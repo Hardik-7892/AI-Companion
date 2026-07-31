@@ -1,7 +1,5 @@
 # model/llm.py
 
-from llama_cpp import Llama
-
 
 class LLM:
     """
@@ -24,6 +22,7 @@ class LLM:
         n_threads: int = 8,
         n_gpu_layers: int = 0,
     ) -> None:
+        from llama_cpp import Llama
         self.model_path = model_path
         self._model = Llama(
             model_path=model_path,

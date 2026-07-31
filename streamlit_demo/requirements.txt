@@ -10,8 +10,7 @@ streamlit>=1.40
 anthropic>=0.120.0
 python-dotenv>=1.0.0
 
-# model/ imports these regardless of backend (llama_cpp, faiss,
-# sentence-transformers) — see model/__init__.py
-llama-cpp-python>=0.3.20
+# Memory (RAG) backend — faiss & sentence-transformers are needed at import
+# for load_recent_history / chat_state even with the Claude backend
 faiss-cpu
 sentence-transformers
