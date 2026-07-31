@@ -1,0 +1,31 @@
+# GPU-accelerated setup for AI Companion (optional).
+# Only needed if you want to offload layers to an NVIDIA GPU.
+# The rest of the dependencies come from requirements.txt.
+
+# 0) Create a dedicated env (do NOT reuse the CPU env):
+#    conda create -n aigf_gpu python=3.11 -y
+#    conda activate aigf_gpu
+
+# 1) CUDA-enabled torch (installs torch/torchvision/torchaudio with CUDA):
+#    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+# 2) CUDA-enabled llama-cpp-python.
+#    RECOMMENDED: install from conda-forge — it ships a prebuilt CUDA build and
+#    avoids the source-build toolchain headaches on Windows:
+#      conda install -c conda-forge llama-cpp-python
+#    This pulls in numpy from conda-forge; if the pip-installed numpy/pandas are
+#    older and the imports then fail with a binary-incompatibility error, upgrade
+#    the pip stack to numpy-2 compatible releases:
+#      pip install --upgrade pandas pyarrow
+#    (If you'd rather not use conda-forge, you can build from source instead —
+#    requires CUDA toolkit + MSVC, and the CMake/MSVC version combination must
+#    support your CUDA toolkit, otherwise you get "No CUDA toolset found" or
+#    "illegal instruction (0xc000001d)" at load time.)
+
+# 3) After the two installs above, install the rest.
+# IMPORTANT: do NOT run `pip install -r requirements.txt` directly — its
+# torch==2.10.0 / torchaudio==2.1.0 pins would downgrade the CUDA torch
+# above. Instead install the app dependencies explicitly:
+#   pip install "gradio>=6.9.0" "llama-cpp-python>=0.3.20" "TTS>=0.21.0" "transformers==5.5.0" faster-whisper simpleaudio pydub numpy faiss-cpu sentence-transformers
+
+# Note: models/ is shared with the CPU setup - no need to re-download.
