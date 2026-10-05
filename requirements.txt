@@ -23,6 +23,10 @@ pydub
 # Numerics
 numpy
 
+# New custom HTML/CSS UI (additive — Gradio/Streamlit unaffected)
+fastapi>=0.115
+uvicorn>=0.30
+
 # Vector DB
 faiss-cpu
 sentence-transformers

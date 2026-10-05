@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-vibe="cozy" data-palette="rose">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Companion — Custom UI</title>
+<link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body data-vibe="cozy" data-palette="rose">
+
+<div class="ambient" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+</div>
+
+<!-- ══ Top bar ══ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" id="brandMark">A<span class="presence" id="presenceDot" aria-hidden="true"></span></span>
+    <div class="brand-text">
+      <strong id="brandName">AI Companion</strong>
+      <small id="backendPill">local · no model yet</small>
+    </div>
+  </div>
+
+  <div class="chat-switch">
+    <select id="chatSelect" aria-label="Select chat"></select>
+    <input id="newChatName" type="text" placeholder="New chat name…" maxlength="40" />
+    <button id="createChatBtn" class="btn ghost" type="button">＋ New</button>
+  </div>
+
+  <div class="top-actions">
+    <button id="stylesBtn" class="icon-btn" type="button" title="Styles" aria-label="Open styles">◈</button>
+    <button id="personaBtn" class="icon-btn" type="button" title="Companion" aria-label="Open companion panel">☺</button>
+    <button id="settingsBtn" class="icon-btn" type="button" title="Settings" aria-label="Open settings">⚙</button>
+  </div>
+</header>
+
+<!-- ══ Stage ══ -->
+<main class="stage">
+  <p id="statusPill" class="status-pill">Starting…</p>
+  <section id="stream" class="stream" aria-live="polite"></section>
+
+  <div id="emptyState" class="empty">
+    <p class="eyebrow">a local companion · remembers you</p>
+    <div class="orb" id="emptyAvatar" aria-hidden="true"><span>✦</span></div>
+    <h1 id="emptyTitle">Say hello to your companion</h1>
+    <p id="emptySub">Set a name and vibe in the companion panel, pick a backend in settings, then just talk. Memories are stored locally per chat.</p>
+    <div class="empty-hints">
+      <button class="hint" type="button">“What do you remember about me?”</button>
+      <button class="hint" type="button">“Tell me something comforting.”</button>
+      <button class="hint" type="button">“Help me plan my evening.”</button>
+    </div>
+  </div>
+</main>
+
+<!-- ══ Composer ══ -->
+<footer class="composer-wrap">
+  <form id="composer" class="composer" autocomplete="off">
+    <textarea id="chatInput" rows="1" placeholder="Say something…" maxlength="4000"></textarea>
+    <button id="sendBtn" class="btn primary" type="submit">Send ➤</button>
+  </form>
+  <div class="composer-row">
+    <button id="loadAllBtn" class="link" type="button">Load full history</button>
+    <span class="dot">·</span>
+    <button id="clearBtn" class="link danger" type="button">Delete chat data</button>
+    <span class="dot">·</span>
+    <span class="kbd-hint"><kbd>Enter</kbd> to send</span>
+  </div>
+</footer>
+
+<!-- ══ Companion slide-over ══ -->
+<aside id="personaPanel" class="panel left" aria-hidden="true">
+  <div class="panel-head">
+    <h2>Companion</h2>
+    <button class="icon-btn" type="button" data-close>✕</button>
+  </div>
+  <label>Your name <input id="userName" type="text" placeholder="You" /></label>
+  <label>Companion's name <input id="companionName" type="text" placeholder="e.g. Sakura" /></label>
+  <div class="grid2">
+    <label>Your gender <input id="userGender" type="text" placeholder="Optional" /></label>
+    <label>Their gender <input id="companionGender" type="text" placeholder="Optional" /></label>
+  </div>
+  <fieldset>
+    <legend>Traits</legend>
+    <div id="traitsBox" class="chips"></div>
+  </fieldset>
+  <label>Custom personality
+    <textarea id="customPersona" rows="3" placeholder="Tone, style, how they behave…"></textarea>
+  </label>
+  <button id="savePersonaBtn" class="btn primary block" type="button">Save companion</button>
+  <p id="personaMsg" class="form-msg"></p>
+</aside>
+
+<!-- ══ Settings slide-over ══ -->
+<aside id="settingsPanel" class="panel right" aria-hidden="true">
+  <div class="panel-head">
+    <h2>Settings</h2>
+    <button class="icon-btn" type="button" data-close>✕</button>
+  </div>
+  <label>Backend
+    <select id="backendSelect"></select>
+  </label>
+  <label id="modelRow">Local model (.gguf in models/)
+    <select id="modelSelect"></select>
+  </label>
+  <label id="claudeRow">OpenRouter model slug
+    <input id="claudeModel" type="text" spellcheck="false" />
+  </label>
+  <label>GPU layers <small>(0 = CPU, works anywhere)</small>
+    <input id="gpuLayers" type="number" min="0" step="1" value="0" />
+  </label>
+  <p class="muted" id="keyNote"></p>
+</aside>
+
+<!-- ══ Styles modal ══ -->
+<div id="stylesModal" class="modal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-label="Styles">
+    <div class="panel-head">
+      <h2>Styles</h2>
+      <button class="icon-btn" type="button" data-close>✕</button>
+    </div>
+    <p class="muted">Pick a vibe (shapes, type, motion) and a palette (colors). Saved on this device.</p>
+    <h3>Vibe</h3>
+    <div class="vibe-grid" id="vibeGrid">
+      <button type="button" data-set-vibe="cozy" class="vibe-card"><b>Cozy</b><span>soft · warm · character</span></button>
+      <button type="button" data-set-vibe="minimal" class="vibe-card"><b>Minimal</b><span>sharp · calm · premium</span></button>
+      <button type="button" data-set-vibe="glass" class="vibe-card"><b>Glass</b><span>frosted · playful · glow</span></button>
+      <button type="button" data-set-vibe="aura" class="vibe-card"><b>Aura</b><span>cinematic · dark · neon</span></button>
+      <button type="button" data-set-vibe="terminal" class="vibe-card"><b>Terminal</b><span>mono · scanlines · cursor</span></button>
+      <button type="button" data-set-vibe="noir" class="vibe-card"><b>Noir</b><span>slow · italic · luxe</span></button>
+      <button type="button" data-set-vibe="pop" class="vibe-card"><b>Pop</b><span>chunky · ink · offset</span></button>
+      <button type="button" data-set-vibe="archive" class="vibe-card"><b>Archive</b><span>paper · index · stamp</span></button>
+      <button type="button" data-set-vibe="retro" class="vibe-card"><b>Retro</b><span>stripes · vinyl · sticker</span></button>
+      <button type="button" data-set-vibe="cyberpunk" class="vibe-card"><b>Cyberpunk</b><span>neon · chamfer · grid</span></button>
+      <button type="button" data-set-vibe="maximal" class="vibe-card"><b>Maximal</b><span>confetti · loud · tilt</span></button>
+      <button type="button" data-set-vibe="swiss" class="vibe-card"><b>Swiss</b><span>rules · caps · grid</span></button>
+      <button type="button" data-set-vibe="raw" class="vibe-card"><b>Raw</b><span>wireframe · exposed</span></button>
+    </div>
+    <h3>Palette</h3>
+    <div class="palette-grid" id="paletteGrid">
+      <button type="button" data-set-palette="rose" class="pal-card"><i class="sw s-rose"></i>Rose</button>
+      <button type="button" data-set-palette="midnight" class="pal-card"><i class="sw s-midnight"></i>Midnight</button>
+      <button type="button" data-set-palette="porcelain" class="pal-card"><i class="sw s-porcelain"></i>Porcelain</button>
+      <button type="button" data-set-palette="sakura" class="pal-card"><i class="sw s-sakura"></i>Sakura Blue</button>
+      <button type="button" data-set-palette="matcha" class="pal-card"><i class="sw s-matcha"></i>Matcha</button>
+      <button type="button" data-set-palette="abyss" class="pal-card"><i class="sw s-abyss"></i>Abyss</button>
+      <button type="button" data-set-palette="lilac" class="pal-card"><i class="sw s-lilac"></i>Lilac</button>
+      <button type="button" data-set-palette="mono" class="pal-card"><i class="sw s-mono"></i>Mono</button>
+      <button type="button" data-set-palette="sunset" class="pal-card"><i class="sw s-sunset"></i>Sunset</button>
+      <button type="button" data-set-palette="custom" class="pal-card"><i class="sw s-custom"></i>Custom</button>
+    </div>
+    <div class="custom-editor" id="customEditor" hidden>
+      <h3>Your colors</h3>
+      <div class="color-rows">
+        <label>Background <input type="color" id="cBg" value="#fff7f3" /></label>
+        <label>Surface <input type="color" id="cCard" value="#fffdfc" /></label>
+        <label>Text <input type="color" id="cInk" value="#38202e" /></label>
+        <label>Accent <input type="color" id="cAccent" value="#d63d7c" /></label>
+        <label>Accent 2 <input type="color" id="cAccent2" value="#e8814a" /></label>
+      </div>
+      <p class="muted">Pick any colors — they apply live while Custom is selected, and are saved on this device.</p>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="assertive"></div>
+<div id="scrim" class="scrim" hidden></div>
+
+<script src="/assets/app.js" defer></script>
+</body>
+</html>
